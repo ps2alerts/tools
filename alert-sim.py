@@ -1,14 +1,14 @@
-from argparse import ArgumentParser
 from dataclasses import dataclass
 from datetime import datetime
 from enum import IntEnum
-
 import json
-import math
 from time import sleep
-from urlpath import URL
-import random
 from typing import List, Optional
+from urlpath import URL
+
+import pika
+from pika.adapters.blocking_connection import BlockingChannel
+import random
 import requests
 from requests.auth import HTTPBasicAuth
 
@@ -117,7 +117,9 @@ class MetagameEvent:
             "censusMetagameEventType": self._type,
             "duration": self.duration,
             "state": self.state,
-            "bracket": 5,
+            "ps2alertsEventType": 2,
+            "phase": 1,
+            "round": 1,
             "features": {
                 "captureHistory": True
             },
@@ -126,7 +128,7 @@ class MetagameEvent:
     
     def instance_id(self) -> str:
         if self.__instance_id is None:
-            self.__instance_id = f"{self.world}-{self.census_id:05d}"
+            self.__instance_id = f"outfitwars-{self.world}-{self.zone}-{self.zone_instance}"
         return self.__instance_id
 
 BASE = URL("https://dev.api.ps2alerts.com")
@@ -201,66 +203,63 @@ class Map:
             int(100 * ns_bases / (len(self._regions) - 2))
         )
 
+@dataclass
+class RabbitEvent:
+    event_name: str
+    payload: dict
+
+    def to_json(self):
+        return {
+            "eventName": self.event_name,
+            "payload": self.payload
+        }
+
+def send_facility_control(channel: BlockingChannel, event: MetagameEvent, facility_id: int, old: Team, new: Team, outfit_id: int):
+    rabbit_capture = RabbitEvent("FacilityControl", {
+        "duration_held": "0",
+        "timestamp": str(int(datetime.utcnow().timestamp())),
+        "world_id": str(event.world),
+        "old_faction_id": str(old),
+        "outfit_id": str(outfit_id),
+        "new_faction_id": str(new),
+        "facility_id": str(facility_id),
+        "zone_id": str((event.zone_instance << 16) | event.zone)
+    })
+    channel.basic_publish(
+        exchange='ps2alerts',
+        routing_key=f'aggregator-outfitwars-{event.world}-{event.zone}-{event.zone_instance}-FacilityControl',
+        body=json.dumps(rabbit_capture.to_json())
+    )
+
+
 def nexus_alert(world: int, instance: int):
-    zone_id = 10
-    event = MetagameEvent(world, zone_id, instance, random.randint(10000, 99999), datetime.utcnow())
-    response = requests.post(str(BASE / "outfit-wars"), json=event.to_json(), auth=AUTH)
+    connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+    channel = connection.channel()
+    
+    zone_id = (instance << 16) | 10
+    event = MetagameEvent(world, 10, instance, random.randint(10000, 99999), datetime.utcnow())
+    rabbit_metagame = RabbitEvent("AdminMessage", {
+        "body": {
+            "duration": str(int(event.duration / 1000)),
+            "faction": "0",
+            "instanceId": event.instance_id(),
+            "metagameType": "outfitwars",
+            "start": str(int(event.time_started.timestamp())),
+            "world": str(event.world),
+            "zone": str(zone_id)
+        },
+        "type": "instanceStart"
+    })
+    channel.basic_publish(
+        exchange='ps2alerts',
+        routing_key='aggregator-admin-development-ps2',
+        body=json.dumps(rabbit_metagame.to_json())
+    )
+    #response = requests.post(str(BASE / "outfit-wars"), json=event.to_json(), auth=AUTH)
     try:
-        assert 200 <= response.status_code <= 299, "Failed to create new instance"
+        #assert 200 <= response.status_code <= 299, "Failed to create new instance"
 
         nexus = Map(zone_id)
-
-        for facility_id in INIT_BLUE_REGIONS:
-            capture = FacilityControl(
-                event.instance_id(), 
-                facility_id, 
-                datetime.utcnow(), 
-                old_faction=Team.BLUE, 
-                new_faction=Team.BLUE, 
-                is_initial=True
-            )
-            nexus.capture(facility_id, Team.BLUE)
-            response = requests.post(
-                str(BASE / "instance-entries" / event.instance_id() / "facility"),
-                json=capture.to_json(),
-                auth=AUTH
-            )
-            assert 200 <= response.status_code <= 299, "Failed to initialize Blue Regions"
-        
-        for facility_id in INIT_RED_REGIONS:
-            capture = FacilityControl(
-                event.instance_id(), 
-                facility_id, 
-                datetime.utcnow(), 
-                old_faction=Team.RED, 
-                new_faction=Team.RED, 
-                is_initial=True
-            )
-            nexus.capture(facility_id, Team.RED)
-            response = requests.post(
-                str(BASE / "instance-entries" / event.instance_id() / "facility"),
-                json=capture.to_json(),
-                auth=AUTH
-            )
-            assert 200 <= response.status_code <= 299, "Failed to initialize Red Regions"
-        
-        for facility_id in INIT_NS_REGIONS:
-            capture = FacilityControl(
-                event.instance_id(), 
-                facility_id, 
-                datetime.utcnow(), 
-                old_faction=Team.NONE, 
-                new_faction=Team.NONE, 
-                is_initial=True
-            )
-            nexus.capture(facility_id, Team.NONE)
-            response = requests.post(
-                str(BASE / "instance-entries" / event.instance_id() / "facility"),
-                json=capture.to_json(),
-                auth=AUTH
-            )
-            assert 200 <= response.status_code <= 299, "Failed to initialize Blue Regions"
-
         to_capture = 0
         captures = MAX_CAPTURES
         while to_capture not in [310610, 310600] and captures > 0:
@@ -268,25 +267,27 @@ def nexus_alert(world: int, instance: int):
             to_capture = random.choice(nexus.get_capturable(team))
             old_faction = nexus.get_region(to_capture)["faction"]
             nexus.capture(to_capture, team)
-            capture = FacilityControl(
-                event.instance_id(), 
-                to_capture, 
-                datetime.utcnow(), 
-                old_faction=old_faction, 
-                new_faction=team,
-                outfit_captured=(RED_OUTFIT if team == Team.RED else BLUE_OUTFIT),
-                map_control=nexus.percentages()
-            )
-            response = requests.post(
-                str(BASE / "instance-entries" / event.instance_id() / "facility"),
-                json=capture.to_json(),
-                auth=AUTH
-            )
-            if not (200 <= response.status_code <= 299):
-                print(f"Error {response.status_code}: {response.content}")
-                print(capture.to_json())
-                assert False
+            # capture = FacilityControl(
+            #     event.instance_id(), 
+            #     to_capture, 
+            #     datetime.utcnow(), 
+            #     old_faction=old_faction, 
+            #     new_faction=team,
+            #     outfit_captured=(RED_OUTFIT if team == Team.RED else BLUE_OUTFIT),
+            #     map_control=nexus.percentages()
+            # )
+            # response = requests.post(
+            #     str(BASE / "instance-entries" / event.instance_id() / "facility"),
+            #     json=capture.to_json(),
+            #     auth=AUTH
+            # )
+            # if not (200 <= response.status_code <= 299):
+            #     print(f"Error {response.status_code}: {response.content}")
+            #     print(capture.to_json())
+            #     assert False
             
+            send_facility_control(channel, event, to_capture, old_faction, team, RED_OUTFIT if team == Team.RED else BLUE_OUTFIT)
+
             captures -= 1
             sleep(5)
         
