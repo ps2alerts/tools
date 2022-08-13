@@ -222,7 +222,7 @@ class RabbitEvent:
             "worldId": str(self.world_id)
         }
 
-def send_facility_control(channel: BlockingChannel, event: MetagameEvent, facility_id: int, old: Team, new: Team, outfit_id: int):
+def send_facility_control(channel: BlockingChannel, event: MetagameEvent, zone_id: int, facility_id: int, old: Team, new: Team, outfit_id: int):
     ret: frame.Method = channel.queue_declare(queue=f'aggregator-outfitwars-{event.world}-{event.zone}-{event.zone_instance}-FacilityControl', passive=True)
     if type(ret.method) != spec.Queue.DeclareOk:
         print("Queue does not exist?")
@@ -234,6 +234,7 @@ def send_facility_control(channel: BlockingChannel, event: MetagameEvent, facili
         "duration_held": "0",
         "timestamp": str(int(now.timestamp())),
         "world_id": str(event.world),
+        "zone_id": str(zone_id),
         "old_faction_id": str(int(old)),
         "outfit_id": str(outfit_id),
         "new_faction_id": str(int(new)),
@@ -330,7 +331,7 @@ def nexus_alert(world: int, instance: int):
             #     print(capture.to_json())
             #     assert False
 
-            send_facility_control(channel, event, to_capture, old_faction, team, RED_OUTFIT if team == Team.RED else BLUE_OUTFIT)
+            send_facility_control(channel, event, zone_id, to_capture, old_faction, team, RED_OUTFIT if team == Team.RED else BLUE_OUTFIT)
 
             captures -= 1
 
