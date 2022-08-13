@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import IntEnum
 import json
 from time import sleep
@@ -7,7 +7,11 @@ from typing import List, Optional
 from urlpath import URL
 
 import pika
+from pika.exceptions import UnroutableError
 from pika.adapters.blocking_connection import BlockingChannel
+from pika.credentials import PlainCredentials
+from pika import frame
+from pika import spec
 import random
 import requests
 from requests.auth import HTTPBasicAuth
@@ -151,7 +155,9 @@ class Map:
             self._regions[region["facility_id"]] = {
                 "name": region["facility_name"],
                 "links": [link["facility_id_b"] for link in region["facility_links"]],
-                "faction": Team.NONE
+                "faction": (Team.BLUE if int(region["facility_id"]) in INIT_BLUE_REGIONS 
+                       else Team.RED  if int(region["facility_id"]) in INIT_RED_REGIONS 
+                       else Team.NONE)
             }
         
         for facility_id in self._regions:
@@ -207,62 +213,100 @@ class Map:
 class RabbitEvent:
     event_name: str
     payload: dict
+    world_id: int
 
     def to_json(self):
         return {
             "eventName": self.event_name,
-            "payload": self.payload
+            "payload": self.payload,
+            "worldId": str(self.world_id)
         }
 
 def send_facility_control(channel: BlockingChannel, event: MetagameEvent, facility_id: int, old: Team, new: Team, outfit_id: int):
+    ret: frame.Method = channel.queue_declare(queue=f'aggregator-outfitwars-{event.world}-{event.zone}-{event.zone_instance}-FacilityControl', passive=True)
+    if type(ret.method) != spec.Queue.DeclareOk:
+        print("Queue does not exist?")
+        print(ret)
+        return
+    now = datetime.utcnow().replace(tzinfo=timezone.utc)
     rabbit_capture = RabbitEvent("FacilityControl", {
+        "event_name": "FacilityControl",
         "duration_held": "0",
-        "timestamp": str(int(datetime.utcnow().timestamp())),
+        "timestamp": str(int(now.timestamp())),
         "world_id": str(event.world),
-        "old_faction_id": str(old),
+        "old_faction_id": str(int(old)),
         "outfit_id": str(outfit_id),
-        "new_faction_id": str(new),
+        "new_faction_id": str(int(new)),
         "facility_id": str(facility_id),
-        "zone_id": str((event.zone_instance << 16) | event.zone)
-    })
+    }, event.world)
+    print("Publishing facility control event:")
+    print(json.dumps(rabbit_capture.to_json()))
     channel.basic_publish(
-        exchange='ps2alerts',
+        exchange='',
         routing_key=f'aggregator-outfitwars-{event.world}-{event.zone}-{event.zone_instance}-FacilityControl',
-        body=json.dumps(rabbit_capture.to_json())
+        body=json.dumps(rabbit_capture.to_json()),
+        properties=pika.BasicProperties(
+            content_type='text/plain',
+            delivery_mode=1
+        )
     )
 
-
 def nexus_alert(world: int, instance: int):
-    connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(
+            host='localhost',
+            credentials=PlainCredentials('guest', 'guest')
+        )
+    )
     channel = connection.channel()
+    channel.confirm_delivery()
+    ret: frame.Method = channel.queue_declare(queue='aggregator-admin-development-ps2', passive=True)
+    if type(ret.method) != spec.Queue.DeclareOk:
+        print("Queue does not exist?")
+        print(ret)
+        return
     
     zone_id = (instance << 16) | 10
-    event = MetagameEvent(world, 10, instance, random.randint(10000, 99999), datetime.utcnow())
+    event = MetagameEvent(world, 10, instance, random.randint(10000, 99999), datetime.utcnow().replace(tzinfo=timezone.utc))
     rabbit_metagame = RabbitEvent("AdminMessage", {
+        "action": "start",
         "body": {
-            "duration": str(int(event.duration / 1000)),
+            "duration": str(int(event.duration)),
             "faction": "0",
             "instanceId": event.instance_id(),
             "metagameType": "outfitwars",
             "start": str(int(event.time_started.timestamp())),
             "world": str(event.world),
             "zone": str(zone_id)
-        },
-        "type": "instanceStart"
-    })
-    channel.basic_publish(
-        exchange='ps2alerts',
-        routing_key='aggregator-admin-development-ps2',
-        body=json.dumps(rabbit_metagame.to_json())
-    )
+        }
+    }, event.world)
+    print("Publishing metagame event:")
+    print(json.dumps(rabbit_metagame.to_json()))
+    try:
+        channel.basic_publish(
+            exchange='',
+            routing_key='aggregator-admin-development-ps2',
+            body=json.dumps(rabbit_metagame.to_json()),
+            properties=pika.BasicProperties(
+                content_type='text/plain',
+                delivery_mode=1
+            ),
+            mandatory=True
+        )
+    except UnroutableError as e:
+        print(e.messages[0].body)
+        print(e.messages[0].method)
+        print(e.messages[0].properties)
+        return 1
     #response = requests.post(str(BASE / "outfit-wars"), json=event.to_json(), auth=AUTH)
     try:
         #assert 200 <= response.status_code <= 299, "Failed to create new instance"
 
-        nexus = Map(zone_id)
+        nexus = Map(zone_id & 0xFFFF)
         to_capture = 0
         captures = MAX_CAPTURES
         while to_capture not in [310610, 310600] and captures > 0:
+            sleep(5)
             team = random.choice([Team.BLUE, Team.RED])
             to_capture = random.choice(nexus.get_capturable(team))
             old_faction = nexus.get_region(to_capture)["faction"]
@@ -289,31 +333,25 @@ def nexus_alert(world: int, instance: int):
             send_facility_control(channel, event, to_capture, old_faction, team, RED_OUTFIT if team == Team.RED else BLUE_OUTFIT)
 
             captures -= 1
-            sleep(5)
-        
-        end_control = nexus.percentages()
-        winner = Team.RED if end_control.tr > 50 else Team.BLUE
-        event.result.nc = end_control.nc
-        event.result.tr = end_control.tr
-        event.result.out_of_play = end_control.out_of_play
-        event.result.victor = winner
+            
     finally:
-        event.time_ended = datetime.utcnow()
-        event.state = AlertState.ENDED
-        data = event.to_json()
-        del data["world"]
-        del data["timeStarted"]
-        del data["zone"]
-        del data["zoneInstanceId"]
-        del data["censusInstanceId"]
-        del data["censusMetagameEventType"]
-        del data["duration"]
-        del data["features"]
-        del data["mapVersion"]
-        response = requests.put(str(BASE / "outfit-wars" / event.instance_id()), json=event.to_json(), auth=AUTH)
-        if not (200 <= response.status_code <= 299):
-            print(f"Error {response.status_code}: {response.content}")
-            print(data)
+        rabbit_end = RabbitEvent("AdminMessage", {
+            "action": "end",
+            "body": {
+                "instanceId": event.instance_id(),
+            }
+        }, event.world)
+        print("Publishing metagame end event:")
+        print(json.dumps(rabbit_end.to_json()))
+        channel.basic_publish(
+            exchange='',
+            routing_key='aggregator-admin-development-ps2',
+            body=json.dumps(rabbit_end.to_json()),
+            properties=pika.BasicProperties(
+                content_type='text/plain',
+                delivery_mode=1
+            )
+        )
 
 
 
