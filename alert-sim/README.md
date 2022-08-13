@@ -22,7 +22,7 @@ pipenv install
 
 Run the tool
 ```shell
-
+./run.sh
 ```
 
 [More info on pipenv](https://pipenv.pypa.io/en/latest/install/#installing-packages-for-your-project)
