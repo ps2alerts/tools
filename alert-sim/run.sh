@@ -1,3 +1,3 @@
 #!/bin/sh
 
-pipenv run python main.py
+pipenv run python3 main.py
