@@ -25,4 +25,6 @@ Run the tool
 ./run.sh
 ```
 
+You may need to run `pipenv shell` and execute `pip3 install certifi` within it, I had trouble with that despite it being "installed".
+
 [More info on pipenv](https://pipenv.pypa.io/en/latest/install/#installing-packages-for-your-project)
