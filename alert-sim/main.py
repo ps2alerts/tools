@@ -261,32 +261,50 @@ def nexus_alert(world: int, instance: int):
     )
     channel = connection.channel()
     channel.confirm_delivery()
-    ret: frame.Method = channel.queue_declare(queue='aggregator-admin-development-ps2', passive=True)
+    queueName = f'aggregator-{world}-MetagameEvent'
+    ret: frame.Method = channel.queue_declare(queue=queueName, passive=True)
     if type(ret.method) != spec.Queue.DeclareOk:
         print("Queue does not exist?")
         print(ret)
         return
 
     zone_id = (instance << 16) | 10
-    event = MetagameEvent(world, 10, instance, random.randint(10000, 99999), datetime.utcnow().replace(tzinfo=timezone.utc))
-    rabbit_metagame = RabbitEvent("AdminMessage", {
-        "action": "start",
-        "body": {
-            "duration": str(int(event.duration)),
-            "faction": "0",
-            "instanceId": event.instance_id(),
-            "metagameType": "outfitwars",
-            "start": str(int(event.time_started.timestamp())),
-            "world": str(event.world),
-            "zone": str(zone_id)
-        }
-    }, event.world)
+    event = MetagameEvent(world, 10, instance, random.randint(1, 123), datetime.utcnow().replace(tzinfo=timezone.utc))
+#     rabbit_metagame = RabbitEvent("AdminMessage", {
+#         "action": "start",
+#         "body": {
+#             "duration": str(int(event.duration)),
+#             "faction": "0",
+#             "instanceId": event.instance_id(),
+#             "metagameType": "outfitwars",
+#             "start": str(int(event.time_started.timestamp())),
+#             "world": str(event.world),
+#             "zone": str(zone_id)
+#         }
+#     }, event.world)
+    rabbit_metagame = RabbitEvent("MetagameEvent",
+        {
+            "event_name": "MetagameEvent",
+            "experience_bonus": "",
+            "faction_vs": "0",
+            "faction_nc": "50",
+            "faction_tr": "50",
+            "instance_id": str(event.census_id),
+            "metagame_event_id": str(event._type),
+            "metagame_event_state": "137",
+            "metagame_event_state_name": "started",
+            "timestamp": str(int(event.time_started.utcnow().timestamp())),
+            "world_id": str(event.world),
+            "zone_id": str(event.zone),
+        },
+        event.world
+    )
     print("Publishing metagame event:")
     print(json.dumps(rabbit_metagame.to_json()))
     try:
         channel.basic_publish(
             exchange='',
-            routing_key='aggregator-admin-development-ps2',
+            routing_key=queueName,
             body=json.dumps(rabbit_metagame.to_json()),
             properties=pika.BasicProperties(
                 content_type='text/plain',
