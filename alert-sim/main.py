@@ -129,7 +129,7 @@ class MetagameEvent:
             },
             "mapVersion": self.map_version
         }
-    
+
     def instance_id(self) -> str:
         if self.__instance_id is None:
             self.__instance_id = f"outfitwars-{self.world}-{self.zone}-{self.zone_instance}"
@@ -147,7 +147,7 @@ MAX_CAPTURES = 20
 
 class Map:
     def __init__(self, zone_id: int, version: str = "1.0"):
-        response = requests.get(str(BASE / "census" / "regions" / str(zone_id) / version))
+        response = requests.get(str(BASE / "census" / "regions" / str(zone_id) / version), verify=False)
         assert 200 <= response.status_code <= 299, "Failed to retrieve map data"
         data = response.json()
         self._regions = {}
@@ -155,19 +155,19 @@ class Map:
             self._regions[region["facility_id"]] = {
                 "name": region["facility_name"],
                 "links": [link["facility_id_b"] for link in region["facility_links"]],
-                "faction": (Team.BLUE if int(region["facility_id"]) in INIT_BLUE_REGIONS 
-                       else Team.RED  if int(region["facility_id"]) in INIT_RED_REGIONS 
+                "faction": (Team.BLUE if int(region["facility_id"]) in INIT_BLUE_REGIONS
+                       else Team.RED  if int(region["facility_id"]) in INIT_RED_REGIONS
                        else Team.NONE)
             }
-        
+
         for facility_id in self._regions:
             for link_id in self._regions[facility_id]["links"]:
                 if facility_id not in self._regions[link_id]["links"]:
                     self._regions[link_id]["links"].append(facility_id)
-    
+
     def capture(self, facility_id: int, team: Team):
         self._regions[str(facility_id)]["faction"] = team
-    
+
     def get_capturable(self, team: Team) -> List[int]:
         to_return = []
         for facility_id in self._regions:
@@ -182,12 +182,12 @@ class Map:
                     # Have a connected base? Capturable
                     to_return.append(int(facility_id))
         return to_return
-    
+
     def get_region(self, facility_id: int):
         if str(facility_id) not in self._regions:
             return None
         return self._regions[str(facility_id)]
-    
+
     def percentages(self) -> MapControl:
         red_bases = 0
         blue_bases = 0
@@ -203,7 +203,7 @@ class Map:
                 ns_bases += 1
         return MapControl(
             0,
-            int(100 * blue_bases / (len(self._regions) - 2)), 
+            int(100 * blue_bases / (len(self._regions) - 2)),
             int(100 * red_bases / (len(self._regions) - 2)),
             0,
             int(100 * ns_bases / (len(self._regions) - 2))
@@ -265,7 +265,7 @@ def nexus_alert(world: int, instance: int):
         print("Queue does not exist?")
         print(ret)
         return
-    
+
     zone_id = (instance << 16) | 10
     event = MetagameEvent(world, 10, instance, random.randint(10000, 99999), datetime.utcnow().replace(tzinfo=timezone.utc))
     rabbit_metagame = RabbitEvent("AdminMessage", {
@@ -312,10 +312,10 @@ def nexus_alert(world: int, instance: int):
             old_faction = nexus.get_region(to_capture)["faction"]
             nexus.capture(to_capture, team)
             # capture = FacilityControl(
-            #     event.instance_id(), 
-            #     to_capture, 
-            #     datetime.utcnow(), 
-            #     old_faction=old_faction, 
+            #     event.instance_id(),
+            #     to_capture,
+            #     datetime.utcnow(),
+            #     old_faction=old_faction,
             #     new_faction=team,
             #     outfit_captured=(RED_OUTFIT if team == Team.RED else BLUE_OUTFIT),
             #     map_control=nexus.percentages()
@@ -329,11 +329,11 @@ def nexus_alert(world: int, instance: int):
             #     print(f"Error {response.status_code}: {response.content}")
             #     print(capture.to_json())
             #     assert False
-            
+
             send_facility_control(channel, event, to_capture, old_faction, team, RED_OUTFIT if team == Team.RED else BLUE_OUTFIT)
 
             captures -= 1
-            
+
     finally:
         rabbit_end = RabbitEvent("AdminMessage", {
             "action": "end",
