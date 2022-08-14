@@ -293,7 +293,7 @@ def nexus_alert(world: int, instance: int):
             "metagame_event_id": str(event._type),
             "metagame_event_state": "137",
             "metagame_event_state_name": "started",
-            "timestamp": str(int(event.time_started.utcnow().timestamp())),
+            "timestamp": str(int(datetime.now().timestamp())),
             "world_id": str(event.world),
             "zone_id": str(zone_id),
         },
