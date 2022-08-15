@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from enum import IntEnum
 import json
 from time import sleep
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from urlpath import URL
 
 import pika
@@ -16,6 +16,8 @@ import random
 import requests
 from requests.auth import HTTPBasicAuth
 
+from threading import Event, Thread
+
 class AlertState(IntEnum):
     STARTING = 0
     STARTED = 1
@@ -25,6 +27,68 @@ class Team(IntEnum):
     NONE = 0
     BLUE = 2
     RED = 3
+
+class Loadout(IntEnum):
+    INFIL_NC = 1
+    LIGHT_NC = 3
+    MEDIC_NC = 4
+    ENGIE_NC = 5
+    HEAVY_NC = 6
+    MAX_NC   = 7
+    INFIL_TR = 8
+    LIGHT_TR = 10
+    MEDIC_TR = 11
+    ENGIE_TR = 12
+    HEAVY_TR = 13
+    MAX_TR   = 14
+    INFIL_VS = 15
+    LIGHT_VS = 17
+    MEDIC_VS = 18
+    ENGIE_VS = 19
+    HEAVY_VS = 20
+    MAX_VS   = 21
+    INFIL_NSO = 28
+    LIGHT_NSO = 29
+    MEDIC_NSO = 30
+    ENGIE_NSO = 31
+    HEAVY_NSO = 32
+    MAX_NSO   = 45
+
+TR_CLASSES = [
+    Loadout.INFIL_TR,
+    Loadout.LIGHT_TR,
+    Loadout.MEDIC_TR,
+    Loadout.ENGIE_TR,
+    Loadout.HEAVY_TR,
+    Loadout.MAX_TR
+]
+
+NC_CLASSES = [
+    Loadout.INFIL_NC,
+    Loadout.LIGHT_NC,
+    Loadout.MEDIC_NC,
+    Loadout.ENGIE_NC,
+    Loadout.HEAVY_NC,
+    Loadout.MAX_NC
+]
+
+VS_CLASSES = [
+    Loadout.INFIL_VS,
+    Loadout.LIGHT_VS,
+    Loadout.MEDIC_VS,
+    Loadout.ENGIE_VS,
+    Loadout.HEAVY_VS,
+    Loadout.MAX_VS
+]
+
+NSO_CLASSES = [
+    Loadout.INFIL_NSO,
+    Loadout.LIGHT_NSO,
+    Loadout.MEDIC_NSO,
+    Loadout.ENGIE_NSO,
+    Loadout.HEAVY_NSO,
+    Loadout.MAX_NSO
+]
 
 @dataclass
 class MapControl:
@@ -141,9 +205,16 @@ AUTH = HTTPBasicAuth("ps2alerts", "foobar") # default dev auth
 INIT_BLUE_REGIONS = [310560, 310610, 310550, 310520]
 INIT_RED_REGIONS  = [310570, 310600, 310540, 310510]
 INIT_NS_REGIONS   = [310530, 310500, 310590]
-BLUE_OUTFIT = 37571208657592881
+BLUE_OUTFIT = 37571208657592881 # [HMRD]
 RED_OUTFIT = 37570391403474491
 MAX_CAPTURES = 20
+
+BLUE_PLAYER = 5428085259783352737    # [HMRD] Fyreflyz
+NC_WEAPON = 7169 # GD-7F
+RED_PLAYER = 5428297992006446465     # RiderAnton
+TR_WEAPON = 7254 # MSW-R
+NSO_RED_PLAYER = 5428985062301123025 # RobotAnton
+NSO_WEAPON = 6013842 # dunno name but its something nso killed with
 
 class Map:
     def __init__(self, zone_id: int, version: str = "1.0"):
@@ -222,17 +293,46 @@ class RabbitEvent:
             "worldId": str(self.world_id)
         }
 
+def send_death_event(channel: BlockingChannel, event: MetagameEvent, zone_id: int, attacker: int, attacker_class: Loadout, attacker_weapon: int, victim: int, victim_class: Loadout):
+    rabbit_death = RabbitEvent("Death", {
+		"event_name": "Death",
+        "attacker_character_id": str(attacker),
+		"attacker_fire_mode_id": "7404", # This should be different for different weapons but i don't think it matters
+		"attacker_loadout_id": str(int(attacker_class)),
+		"attacker_vehicle_id": "0", # infants only
+		"attacker_weapon_id": str(attacker_weapon),
+		"character_id": str(victim),
+		"character_loadout_id": str(int(victim_class)),
+		"is_critical": "0",
+		"is_headshot": "1", # everyones a pro player right?
+		"timestamp": str(int(datetime.now().timestamp())),
+		"vehicle_id": "0", # this is borked so nobody dies in a vehicle ever according to census
+		"world_id": str(event.world),
+		"zone_id": str(zone_id)
+    }, event.world)
+    print("Publishing death event:")
+    print(json.dumps(rabbit_death.to_json()))
+    channel.basic_publish(
+        exchange='',
+        routing_key=f'aggregator-outfitwars-{event.world}-{event.zone}-{event.zone_instance}-Death',
+        body=json.dumps(rabbit_death.to_json()),
+        properties=pika.BasicProperties(
+            content_type='text/plain',
+            delivery_mode=1
+        )
+    )
+
+
 def send_facility_control(channel: BlockingChannel, event: MetagameEvent, zone_id: int, facility_id: int, old: Team, new: Team, outfit_id: int):
     ret: frame.Method = channel.queue_declare(queue=f'aggregator-outfitwars-{event.world}-{event.zone}-{event.zone_instance}-FacilityControl', passive=True)
     if type(ret.method) != spec.Queue.DeclareOk:
         print("Queue does not exist?")
         print(ret)
         return
-    now = datetime.utcnow().replace(tzinfo=timezone.utc)
     rabbit_capture = RabbitEvent("FacilityControl", {
         "event_name": "FacilityControl",
         "duration_held": "0",
-        "timestamp": str(int(now.timestamp())),
+        "timestamp": str(int(datetime.now().timestamp())),
         "world_id": str(event.world),
         "zone_id": str(zone_id),
         "old_faction_id": str(int(old)),
@@ -251,6 +351,47 @@ def send_facility_control(channel: BlockingChannel, event: MetagameEvent, zone_i
             delivery_mode=1
         )
     )
+
+def death_worker(interval: float, event: MetagameEvent) -> Tuple[Thread, Event]:
+    stop = Event()
+    def work():
+        connection = pika.BlockingConnection(
+            pika.ConnectionParameters(
+                host='localhost',
+                credentials=PlainCredentials('guest', 'guest')
+            )
+        )
+        channel = connection.channel()
+        players = [BLUE_PLAYER, RED_PLAYER, NSO_RED_PLAYER]
+        weapons = {
+            BLUE_PLAYER: NC_WEAPON,
+            RED_PLAYER: TR_WEAPON,
+            NSO_RED_PLAYER: NSO_WEAPON
+        }
+        classes = {
+            BLUE_PLAYER: NC_CLASSES,
+            RED_PLAYER: TR_CLASSES,
+            NSO_RED_PLAYER: NSO_CLASSES
+        }
+        while not stop.wait(interval):
+            attacker = random.choice(players)
+            attacker_weapon = weapons[attacker]
+            attacker_class = random.choice(classes[attacker])
+            victim = random.choice(players)
+            victim_class = random.choice(classes[victim])
+            send_death_event(
+                channel, 
+                event, 
+                (event.zone_instance << 16) | event.zone,
+                attacker,
+                attacker_class,
+                attacker_weapon,
+                victim,
+                victim_class
+            )
+    thread = Thread(target=work)
+    return thread, stop
+
 
 def nexus_alert(world: int, instance: int):
     connection = pika.BlockingConnection(
@@ -317,43 +458,24 @@ def nexus_alert(world: int, instance: int):
         print(e.messages[0].method)
         print(e.messages[0].properties)
         return 1
-    #response = requests.post(str(BASE / "outfit-wars"), json=event.to_json(), auth=AUTH)
     try:
-        #assert 200 <= response.status_code <= 299, "Failed to create new instance"
-
         nexus = Map(zone_id & 0xFFFF)
+        death_thread, death_stop_event = death_worker(1.0, event)
         to_capture = 0
         captures = MAX_CAPTURES
+        death_thread.start()
         while to_capture not in [310610, 310600] and captures > 0:
             sleep(5)
             team = random.choice([Team.BLUE, Team.RED])
             to_capture = random.choice(nexus.get_capturable(team))
             old_faction = nexus.get_region(to_capture)["faction"]
             nexus.capture(to_capture, team)
-            # capture = FacilityControl(
-            #     event.instance_id(),
-            #     to_capture,
-            #     datetime.utcnow(),
-            #     old_faction=old_faction,
-            #     new_faction=team,
-            #     outfit_captured=(RED_OUTFIT if team == Team.RED else BLUE_OUTFIT),
-            #     map_control=nexus.percentages()
-            # )
-            # response = requests.post(
-            #     str(BASE / "instance-entries" / event.instance_id() / "facility"),
-            #     json=capture.to_json(),
-            #     auth=AUTH
-            # )
-            # if not (200 <= response.status_code <= 299):
-            #     print(f"Error {response.status_code}: {response.content}")
-            #     print(capture.to_json())
-            #     assert False
-
             send_facility_control(channel, event, zone_id, to_capture, old_faction, team, RED_OUTFIT if team == Team.RED else BLUE_OUTFIT)
 
             captures -= 1
 
     finally:
+        death_stop_event.set()
         rabbit_end = RabbitEvent("AdminMessage", {
             "action": "end",
             "body": {
@@ -371,6 +493,7 @@ def nexus_alert(world: int, instance: int):
                 delivery_mode=1
             )
         )
+        death_thread.join()
 
 
 
