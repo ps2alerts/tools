@@ -4,7 +4,6 @@ from enum import IntEnum
 import json
 from time import sleep
 from typing import List, Optional, Tuple
-from urlpath import URL
 
 import pika
 from pika.exceptions import UnroutableError
@@ -14,193 +13,8 @@ from pika import frame
 from pika import spec
 import random
 import requests
-from requests.auth import HTTPBasicAuth
 
 from threading import Event, Thread
-
-class AlertState(IntEnum):
-    STARTING = 0
-    STARTED = 1
-    ENDED = 2
-
-class Team(IntEnum):
-    NONE = 0
-    BLUE = 2
-    RED = 3
-
-class Loadout(IntEnum):
-    INFIL_NC = 1
-    LIGHT_NC = 3
-    MEDIC_NC = 4
-    ENGIE_NC = 5
-    HEAVY_NC = 6
-    MAX_NC   = 7
-    INFIL_TR = 8
-    LIGHT_TR = 10
-    MEDIC_TR = 11
-    ENGIE_TR = 12
-    HEAVY_TR = 13
-    MAX_TR   = 14
-    INFIL_VS = 15
-    LIGHT_VS = 17
-    MEDIC_VS = 18
-    ENGIE_VS = 19
-    HEAVY_VS = 20
-    MAX_VS   = 21
-    INFIL_NSO = 28
-    LIGHT_NSO = 29
-    MEDIC_NSO = 30
-    ENGIE_NSO = 31
-    HEAVY_NSO = 32
-    MAX_NSO   = 45
-
-TR_CLASSES = [
-    Loadout.INFIL_TR,
-    Loadout.LIGHT_TR,
-    Loadout.MEDIC_TR,
-    Loadout.ENGIE_TR,
-    Loadout.HEAVY_TR,
-    Loadout.MAX_TR
-]
-
-NC_CLASSES = [
-    Loadout.INFIL_NC,
-    Loadout.LIGHT_NC,
-    Loadout.MEDIC_NC,
-    Loadout.ENGIE_NC,
-    Loadout.HEAVY_NC,
-    Loadout.MAX_NC
-]
-
-VS_CLASSES = [
-    Loadout.INFIL_VS,
-    Loadout.LIGHT_VS,
-    Loadout.MEDIC_VS,
-    Loadout.ENGIE_VS,
-    Loadout.HEAVY_VS,
-    Loadout.MAX_VS
-]
-
-NSO_CLASSES = [
-    Loadout.INFIL_NSO,
-    Loadout.LIGHT_NSO,
-    Loadout.MEDIC_NSO,
-    Loadout.ENGIE_NSO,
-    Loadout.HEAVY_NSO,
-    Loadout.MAX_NSO
-]
-
-@dataclass
-class MapControl:
-    vs: float
-    nc: float
-    tr: float
-    cutoff: float
-    out_of_play: float
-
-    def to_json(self) -> dict:
-        return {
-            "vs": self.vs,
-            "nc": self.nc,
-            "tr": self.tr,
-            "cutoff": self.cutoff,
-            "outOfPlay": self.out_of_play
-        }
-
-@dataclass
-class FacilityControl:
-    instance: str
-    facility_id: int
-    timestamp: datetime
-    old_faction: int
-    new_faction: int
-    duration_held: int = 0
-    is_initial: bool = False
-    is_defence: bool = False
-    outfit_captured: Optional[int] = None
-    map_control: Optional[MapControl] = None
-
-    def to_json(self) -> dict:
-        return {
-            "instance": self.instance,
-            "facility": self.facility_id,
-            "timestamp": self.timestamp.isoformat(),
-            "oldFaction": self.old_faction,
-            "newFaction": self.new_faction,
-            "durationHeld": self.duration_held,
-            "isInitial": self.is_initial,
-            "isDefence": self.is_defence,
-            "outfitCaptured": str(self.outfit_captured),
-            "mapControl": self.map_control.to_json() if self.map_control is not None else None
-        }
-
-@dataclass
-class MetagameResult:
-    vs: float
-    nc: float
-    tr: float
-    cutoff: float
-    out_of_play: float
-    victor: Optional[Team] = None
-    draw: bool = False
-    per_base_percentage: float = 100/9
-
-    def to_json(self) -> dict:
-        return {
-            "vs": self.vs,
-            "nc": self.nc,
-            "tr": self.tr,
-            "cutoff": self.cutoff,
-            "outOfPlay": self.out_of_play,
-            "victor": self.victor,
-            "draw": self.draw,
-            "perBasePercentage": self.per_base_percentage,
-        }
-
-@dataclass
-class MetagameEvent:
-    world: int
-    zone: int
-    zone_instance: int
-    census_id: int
-    time_started: datetime
-    time_ended: Optional[datetime] = None
-    _type: int = 227 # Nexus Outfit War
-    result: MetagameResult = MetagameResult(0, 33, 33, 0, 34)
-    duration: int = 1000 * 60 * 45 # 45 minute alert
-    state: AlertState = AlertState.STARTED
-    map_version: str = "1.0"
-    __instance_id: str = None
-
-    def to_json(self) -> dict:
-        return {
-            "instanceId": self.instance_id(),
-            "world": self.world,
-            "timeStarted": self.time_started.isoformat(),
-            "timeEnded": self.time_ended.isoformat() if self.time_ended is not None else None,
-            "result": self.result.to_json() if self.result is not None else None,
-            "zone": self.zone,
-            "zoneInstanceId": self.zone_instance,
-            "censusInstanceId": self.census_id,
-            "censusMetagameEventType": self._type,
-            "duration": self.duration,
-            "state": self.state,
-            "ps2alertsEventType": 2,
-            "phase": 1,
-            "round": 1,
-            "features": {
-                "captureHistory": True
-            },
-            "mapVersion": self.map_version
-        }
-
-    def instance_id(self) -> str:
-        if self.__instance_id is None:
-            self.__instance_id = f"outfitwars-{self.world}-{self.zone}-{self.zone_instance}"
-        return self.__instance_id
-
-BASE = URL("https://dev.api.ps2alerts.com")
-AUTH = HTTPBasicAuth("ps2alerts", "foobar") # default dev auth
 
 INIT_BLUE_REGIONS = [310560, 310610, 310550, 310520]
 INIT_RED_REGIONS  = [310570, 310600, 310540, 310510]
@@ -280,19 +94,6 @@ class Map:
             int(100 * ns_bases / (len(self._regions) - 2))
         )
 
-@dataclass
-class RabbitEvent:
-    event_name: str
-    payload: dict
-    world_id: int
-
-    def to_json(self):
-        return {
-            "eventName": self.event_name,
-            "payload": self.payload,
-            "worldId": str(self.world_id)
-        }
-
 def send_death_event(channel: BlockingChannel, event: MetagameEvent, zone_id: int, attacker: int, attacker_class: Loadout, attacker_weapon: int, victim: int, victim_class: Loadout):
     rabbit_death = RabbitEvent("Death", {
 		"event_name": "Death",
@@ -321,7 +122,6 @@ def send_death_event(channel: BlockingChannel, event: MetagameEvent, zone_id: in
             delivery_mode=1
         )
     )
-
 
 def send_facility_control(channel: BlockingChannel, event: MetagameEvent, zone_id: int, facility_id: int, old: Team, new: Team, outfit_id: int):
     ret: frame.Method = channel.queue_declare(queue=f'aggregator-outfitwars-{event.world}-{event.zone}-{event.zone_instance}-FacilityControl', passive=True)
@@ -380,8 +180,8 @@ def death_worker(interval: float, event: MetagameEvent) -> Tuple[Thread, Event]:
             victim = random.choice(players)
             victim_class = random.choice(classes[victim])
             send_death_event(
-                channel, 
-                event, 
+                channel,
+                event,
                 (event.zone_instance << 16) | event.zone,
                 attacker,
                 attacker_class,
@@ -392,16 +192,8 @@ def death_worker(interval: float, event: MetagameEvent) -> Tuple[Thread, Event]:
     thread = Thread(target=work)
     return thread, stop
 
-
 def nexus_alert(world: int, instance: int):
-    connection = pika.BlockingConnection(
-        pika.ConnectionParameters(
-            host='localhost',
-            credentials=PlainCredentials('guest', 'guest')
-        )
-    )
-    channel = connection.channel()
-    channel.confirm_delivery()
+
     queueName = f'aggregator-{world}-MetagameEvent'
     ret: frame.Method = channel.queue_declare(queue=queueName, passive=True)
     if type(ret.method) != spec.Queue.DeclareOk:
@@ -494,8 +286,6 @@ def nexus_alert(world: int, instance: int):
             )
         )
         death_thread.join()
-
-
 
 # Simple simulator that fakes an alert on Nexus with a bunch of random (possible) captures
 #   Basically intended to test out various scenarios that could happen with outfit wars

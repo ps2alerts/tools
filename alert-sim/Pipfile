@@ -8,6 +8,7 @@ urlpath = "*"
 requests = "*"
 certifi = "*"
 pika = "*"
+dataclasses-json = "*"
 
 [dev-packages]
 
