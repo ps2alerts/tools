@@ -3,7 +3,7 @@ sys.path.append("..") # Adds higher directory to python modules path. This is so
 
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 from constants import AlertState, Ps2alertsEventType, World, Zone
 from .MetagameResult import MetagameResult
@@ -25,3 +25,4 @@ class TerritoryInstance:
 
     def __post_init__(self):
         self.instanceId = str(self.world.value)+'-'+str(self.censusInstanceId)
+        self.mapVersion = '1.1' if self.zone == Zone.OSHUR else '1.0'
