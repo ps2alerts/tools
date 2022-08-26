@@ -1,14 +1,16 @@
+from typing import Dict
+import json
+import pika
+from pika import frame
+from pika import spec
+from pika.adapters.blocking_connection import BlockingChannel
+from pika.credentials import PlainCredentials
 import sys
 sys.path.append("..") # Adds higher directory to python modules path. This is so dumb.
 
-import json
-import pika
-from typing import Dict
-from pika.adapters.blocking_connection import BlockingChannel
-from pika.credentials import PlainCredentials
-from pika import frame
-from pika import spec
 from dataclass import RabbitCensusMessage
+from service import Logger
+log = Logger.getLogger()
 
 class RabbitConnection:
     def getChannel():
@@ -26,18 +28,18 @@ class RabbitConnection:
     def declareQueue(queueName: str, channel: BlockingChannel):
         ret: frame.Method = channel.queue_declare(queue=queueName, passive=True)
         if type(ret.method) != spec.Queue.DeclareOk:
-            print("Queue does not exist?")
+            log.critical("Queue does not exist!")
             print(ret)
             return
-        print('Queue '+queueName+' declared!')
+        log.debug('Queue '+queueName+' declared!')
 
     def publishMessage(
         queueName: str,
         channel: BlockingChannel,
         message: RabbitCensusMessage
     ):
-        print("Publishing event:")
-        print(message)
+        log.debug("Publishing event:")
+        log.debug(message)
         try:
             channel.basic_publish(
                 exchange='',
@@ -55,4 +57,4 @@ class RabbitConnection:
             print(e.messages[0].properties)
             return 1
 
-        print('Event published!')
+        log.debug('Event published!')

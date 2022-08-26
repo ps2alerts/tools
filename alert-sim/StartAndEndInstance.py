@@ -1,15 +1,17 @@
-import random
-from datetime import datetime
 from dataclasses import asdict
+from datetime import datetime
+import random
 from time import sleep
 
 from constants import Loadout, World, Zone
 from dataclass import TerritoryInstance
 from events import DeathEvent
 from operations import MetagameEventOps, PreflightChecksOps, Ps2AlertsApiOps
-from service import RabbitConnection
+from service import Logger, RabbitConnection
+log = Logger.getLogger()
 
 def main():
+    log.info('Starting scenario...')
     PreflightChecksOps.run()
 
     channel = RabbitConnection.getChannel()
@@ -23,7 +25,7 @@ def main():
 
     MetagameEventOps.startTerritoryInstance(instance, channel)
     MetagameEventOps.endTerritoryInstance(instance, channel)
-    print('Finished!')
+    log.info('Finished!')
 
 if __name__ == "__main__":
     main()
