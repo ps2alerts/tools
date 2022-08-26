@@ -38,3 +38,30 @@ class MetagameEventOps:
         )
 
         print('Metagame Published!')
+
+    def endTerritoryInstance(instance: TerritoryInstance, channel: BlockingChannel):
+        print('Ending Territory instance')
+        queueName = f'aggregator-{instance.world}-MetagameEvent'
+        RabbitConnection.declareQueue(queueName, channel)
+
+        metagameEvent = MetagameEvent(
+            str(instance.censusInstanceId),
+            str(MetagameEventType.INDAR_ENLIGHTENMENT.value),
+            str(MetagameEventState.STARTED.value),
+            'ended',
+            str(instance.world.value),
+            str(instance.zone.value),
+            str(int(datetime.fromisoformat(instance.timeStarted).timestamp()))
+        )
+
+        message = RabbitCensusMessage(
+            metagameEvent.event_name,
+            metagameEvent.world_id,
+            asdict(metagameEvent)
+        )
+
+        RabbitConnection.publishMessage(
+            queueName,
+            channel,
+            message
+        )
