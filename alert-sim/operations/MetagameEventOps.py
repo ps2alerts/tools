@@ -1,6 +1,6 @@
-from pika.adapters.blocking_connection import BlockingChannel
 from dataclasses import asdict
 from datetime import datetime
+from pika.adapters.blocking_connection import BlockingChannel
 from time import sleep
 import sys
 sys.path.append("..") # Adds higher directory to python modules path. This is so dumb.
@@ -8,15 +8,15 @@ sys.path.append("..") # Adds higher directory to python modules path. This is so
 from constants import AlertState, MetagameEventType, MetagameEventState
 from dataclass import RabbitCensusMessage, TerritoryInstance
 from events import MetagameEvent
-from service import Logger, RabbitConnection
-from .Ps2AlertsApiOps import Ps2AlertsApiOps
+from service import Logger
 log = Logger.getLogger()
+from .Ps2AlertsApiOps import Ps2AlertsApiOps
+from .RabbitOps import RabbitOps
 
 class MetagameEventOps:
     def startTerritoryInstance(instance: TerritoryInstance, channel: BlockingChannel):
         log.info('Starting Territory instance')
         queueName = f'aggregator-{instance.world}-MetagameEvent'
-        RabbitConnection.declareQueue(queueName, channel)
 
         metagameEvent = MetagameEvent(
             str(instance.censusInstanceId),
@@ -28,17 +28,7 @@ class MetagameEventOps:
             str(int(datetime.fromisoformat(instance.timeStarted).timestamp()))
         )
 
-        message = RabbitCensusMessage(
-            metagameEvent.event_name,
-            metagameEvent.world_id,
-            asdict(metagameEvent)
-        )
-
-        RabbitConnection.publishMessage(
-            queueName,
-            channel,
-            message
-        )
+        RabbitOps.send(metagameEvent, queueName, channel)
 
         log.info('Metagame Published! Waiting 5s for processing...')
         sleep(5)
@@ -49,7 +39,6 @@ class MetagameEventOps:
     def endTerritoryInstance(instance: TerritoryInstance, channel: BlockingChannel):
         log.info('Ending Territory instance')
         queueName = f'aggregator-{instance.world}-MetagameEvent'
-        RabbitConnection.declareQueue(queueName, channel)
 
         metagameEvent = MetagameEvent(
             str(instance.censusInstanceId),
@@ -61,17 +50,7 @@ class MetagameEventOps:
             str(int(datetime.fromisoformat(instance.timeStarted).timestamp()))
         )
 
-        message = RabbitCensusMessage(
-            metagameEvent.event_name,
-            metagameEvent.world_id,
-            asdict(metagameEvent)
-        )
-
-        RabbitConnection.publishMessage(
-            queueName,
-            channel,
-            message
-        )
+        RabbitOps.send(metagameEvent, queueName, channel)
 
         log.info('Metagame Published! Waiting 5s for processing...')
         sleep(5)
