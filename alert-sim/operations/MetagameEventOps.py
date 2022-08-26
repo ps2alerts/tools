@@ -1,4 +1,3 @@
-from dataclasses import asdict
 from datetime import datetime
 from pika.adapters.blocking_connection import BlockingChannel
 from time import sleep
@@ -6,7 +5,7 @@ import sys
 sys.path.append("..") # Adds higher directory to python modules path. This is so dumb.
 
 from constants import AlertState, MetagameEventType, MetagameEventState
-from dataclass import RabbitCensusMessage, TerritoryInstance
+from dataclass import TerritoryInstance
 from events import MetagameEvent
 from service import Logger
 log = Logger.getLogger()
