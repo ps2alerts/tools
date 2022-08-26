@@ -24,8 +24,8 @@ class MetagameEventOps:
 
         print(metagameEvent.to_json())
 
-#         RabbitConnection.publishMessage(
-#             queueName,
-#             channel,
-#             metagameEvent
-#         )
+        RabbitConnection.publishMessage(
+            queueName,
+            channel,
+            metagameEvent.to_json()
+        )

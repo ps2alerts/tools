@@ -1,3 +1,4 @@
+import json
 import pika
 from typing import Dict
 from pika.adapters.blocking_connection import BlockingChannel
@@ -29,15 +30,15 @@ class RabbitConnection:
     def publishMessage(
         queueName: str,
         channel: BlockingChannel,
-        event: Dict
+        jsonBody: str
     ):
         print("Publishing event:")
-        print(json.dumps(event))
+        print(jsonBody)
         try:
             channel.basic_publish(
                 exchange='',
                 routing_key=queueName,
-                body=json.dumps(event),
+                body=jsonBody,
                 properties=pika.BasicProperties(
                     content_type='text/plain',
                     delivery_mode=1
