@@ -4,3 +4,5 @@ from .MetagameResult import MetagameResult
 from .OutfitwarsInstance import OutfitwarsInstance
 from .RabbitCensusMessage import RabbitCensusMessage
 from .TerritoryInstance import TerritoryInstance
+
+__all__ = [FacilityControl, MapControl, MetagameResult, OutfitwarsInstance, RabbitCensusMessage, TerritoryInstance]

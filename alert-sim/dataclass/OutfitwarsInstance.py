@@ -1,6 +1,3 @@
-import sys
-sys.path.append("..") # Adds higher directory to python modules path. This is so dumb.
-
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from datetime import datetime
@@ -15,7 +12,7 @@ class OutfitwarsInstance:
     zoneInstanceId: str
     world: World
     zone: Zone
-    timeStarted: int
+    timeStarted: datetime
     phase: int
     round: int
     instanceId: str = ''

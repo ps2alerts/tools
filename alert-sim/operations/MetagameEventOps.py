@@ -1,16 +1,13 @@
 from datetime import datetime
 from pika.adapters.blocking_connection import BlockingChannel
 from time import sleep
-import sys
-sys.path.append("..") # Adds higher directory to python modules path. This is so dumb.
 
 from constants import AlertState, MetagameEventType, MetagameEventState
 from dataclass import TerritoryInstance
 from events import MetagameEvent
-from service import Logger
+from service import Logger, rabbit
 log = Logger.getLogger()
 from .Ps2AlertsApiOps import Ps2AlertsApiOps
-from .RabbitOps import RabbitOps
 
 class MetagameEventOps:
     def startTerritoryInstance(instance: TerritoryInstance, channel: BlockingChannel):
@@ -27,7 +24,7 @@ class MetagameEventOps:
             str(int(datetime.fromisoformat(instance.timeStarted).timestamp()))
         )
 
-        RabbitOps.send(metagameEvent, queueName, channel)
+        rabbit.send(metagameEvent, queueName)
 
         log.info('Metagame Published! Waiting 5s for processing...')
         sleep(5)
@@ -42,14 +39,14 @@ class MetagameEventOps:
         metagameEvent = MetagameEvent(
             str(instance.censusInstanceId),
             str(MetagameEventType.INDAR_ENLIGHTENMENT.value),
-            str(MetagameEventState.STARTED.value),
+            str(MetagameEventState.FINISHED.value),
             'ended',
             str(instance.world.value),
             str(instance.zone.value),
             str(int(datetime.fromisoformat(instance.timeStarted).timestamp()))
         )
 
-        RabbitOps.send(metagameEvent, queueName, channel)
+        rabbit.send(metagameEvent, queueName)
 
         log.info('Metagame Published! Waiting 5s for processing...')
         sleep(5)

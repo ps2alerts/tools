@@ -1,6 +1,3 @@
-import sys
-sys.path.append("..") # Adds higher directory to python modules path. This is so dumb.
-
 from dataclasses import dataclass
 from typing import Optional
 from constants import Team

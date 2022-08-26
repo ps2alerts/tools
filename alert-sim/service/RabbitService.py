@@ -1,32 +1,35 @@
 from dataclasses import asdict
-from pika.adapters.blocking_connection import BlockingChannel
-import sys
-sys.path.append("..") # Adds higher directory to python modules path. This is so dumb.
-from typing import Dict
 
 from dataclass import RabbitCensusMessage
 from service import Logger, RabbitConnection
+from events import StreamEvent
 log = Logger.getLogger()
 
-class RabbitOps:
+class RabbitService:
+    _connection: RabbitConnection = None
+
+    def __init__(self, connection: RabbitConnection):
+        self._connection = connection
+
     def send(
-        event: Dict,
-        queueName: str,
-        channel: BlockingChannel
+        self,
+        event: StreamEvent,
+        queueName: str
     ):
         log.debug('Sending message to Rabbit queue '+queueName+'...')
         log.debug(asdict(event))
 
-        RabbitConnection.declareQueue(queueName, channel)
+        self._connection.declareQueue(queueName)
 
         message = RabbitCensusMessage(
             event.event_name,
             event.world_id,
-            asdict(event)
+            event.to_json()
         )
 
-        RabbitConnection.publishMessage(
+        self._connection.publishMessage(
             queueName,
-            channel,
             message
         )
+
+rabbit = RabbitService(RabbitConnection())

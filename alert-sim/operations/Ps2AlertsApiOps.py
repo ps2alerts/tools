@@ -1,8 +1,6 @@
-import sys
-sys.path.append("..") # Adds higher directory to python modules path. This is so dumb.
 import requests
-from urllib.parse import urlencode
 import urllib3
+from urllib.parse import urlencode
 urllib3.disable_warnings() # Turn off the SSL verification warning log spam
 
 from AppConfig import AppConfig

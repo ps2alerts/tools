@@ -1,22 +1,18 @@
-from dataclasses import asdict
-from pika.adapters.blocking_connection import BlockingChannel
-import sys
-sys.path.append("..") # Adds higher directory to python modules path. This is so dumb.
+from time import sleep
+from typing import List
 
-from dataclass import RabbitCensusMessage, TerritoryInstance
-from events import DeathEvebt
-from service import Logger
+from dataclass import TerritoryInstance
+from events import DeathEvent
+from service import Logger, rabbit
 log = Logger.getLogger()
-from .Ps2AlertsApiOps import Ps2AlertsApiOps
-from .RabbitOps import RabbitOps
 
 class DeathEventOps:
-    def send(instance: TerritoryInstance, events: List[DeathEvent], channel: BlockingChannel):
+    def send(instance: TerritoryInstance, events: List[DeathEvent]):
         log.info('Sending deaths for instance #'+instance.instanceId+'...')
         queueName = f'aggregator-{instance.instanceId}-Death'
 
         for event in events:
-            RabbitOps.send(event, queueName, channel)
+            rabbit.send(event, queueName)
 
         log.info('Deaths Published! Waiting 2.5s for processing...')
         sleep(2.5)
