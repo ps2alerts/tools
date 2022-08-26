@@ -5,6 +5,7 @@ from constants import Loadout, World, Zone
 from dataclass import TerritoryInstance
 from events import DeathEvent
 from operations import MetagameEventOps
+from service import RabbitConnection
 
 # def send_death_event(
 #     channel: BlockingChannel,
@@ -43,9 +44,9 @@ def main():
         timeStarted=datetime.now().isoformat()
     )
 
-    print(instance.to_json())
+    channel = RabbitConnection.getChannel()
 
-    MetagameEventOps.startTerritory(instance)
+    MetagameEventOps.startTerritoryInstance(instance, channel)
 
 if __name__ == "__main__":
     main()

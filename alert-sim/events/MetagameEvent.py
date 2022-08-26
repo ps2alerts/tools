@@ -17,9 +17,9 @@ class MetagameEvent:
     metagame_event_state_name: str
     world_id: str
     zone_id: str
-    timestamp: str = str(datetime.now().timestamp())
-    event_name = 'MetagameEvent'
-    experience_bonus = '',
-    faction_vs = '',
-    faction_nc = '',
-    faction_tr = '',
+    timestamp: str = str(int(datetime.now().timestamp()))
+    event_name: str = 'MetagameEvent'
+    experience_bonus: str = '0'
+    faction_vs: str = '33'
+    faction_nc: str = '33'
+    faction_tr: str = '33'

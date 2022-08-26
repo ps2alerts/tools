@@ -195,11 +195,7 @@ def death_worker(interval: float, event: MetagameEvent) -> Tuple[Thread, Event]:
 def nexus_alert(world: int, instance: int):
 
     queueName = f'aggregator-{world}-MetagameEvent'
-    ret: frame.Method = channel.queue_declare(queue=queueName, passive=True)
-    if type(ret.method) != spec.Queue.DeclareOk:
-        print("Queue does not exist?")
-        print(ret)
-        return
+
 
     zone_id = (instance << 16) | 10
     event = MetagameEvent(world, 10, instance, random.randint(1, 123), datetime.utcnow().replace(tzinfo=timezone.utc))
