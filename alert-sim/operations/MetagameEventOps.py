@@ -2,9 +2,10 @@ import sys
 sys.path.append("..") # Adds higher directory to python modules path. This is so dumb.
 
 from pika.adapters.blocking_connection import BlockingChannel
+from dataclasses import asdict
 from datetime import datetime
 from constants import MetagameEventType, MetagameEventState
-from dataclass import TerritoryInstance
+from dataclass import RabbitCensusMessage, TerritoryInstance
 from events import MetagameEvent
 from service import RabbitConnection
 
@@ -15,7 +16,7 @@ class MetagameEventOps:
         RabbitConnection.declareQueue(queueName, channel)
 
         metagameEvent = MetagameEvent(
-            instance.instanceId,
+            str(instance.censusInstanceId),
             str(MetagameEventType.INDAR_ENLIGHTENMENT.value),
             str(MetagameEventState.STARTED.value),
             'started',
@@ -24,12 +25,16 @@ class MetagameEventOps:
             str(int(datetime.fromisoformat(instance.timeStarted).timestamp()))
         )
 
-        print(metagameEvent.to_json())
+        message = RabbitCensusMessage(
+            metagameEvent.event_name,
+            metagameEvent.world_id,
+            asdict(metagameEvent)
+        )
 
         RabbitConnection.publishMessage(
             queueName,
             channel,
-            metagameEvent.to_json()
+            message
         )
 
         print('Metagame Published!')

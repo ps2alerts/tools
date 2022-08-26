@@ -1,3 +1,6 @@
+import sys
+sys.path.append("..") # Adds higher directory to python modules path. This is so dumb.
+
 import json
 import pika
 from typing import Dict
@@ -5,6 +8,7 @@ from pika.adapters.blocking_connection import BlockingChannel
 from pika.credentials import PlainCredentials
 from pika import frame
 from pika import spec
+from dataclass import RabbitCensusMessage
 
 class RabbitConnection:
     def getChannel():
@@ -30,15 +34,15 @@ class RabbitConnection:
     def publishMessage(
         queueName: str,
         channel: BlockingChannel,
-        jsonBody: str
+        message: RabbitCensusMessage
     ):
         print("Publishing event:")
-        print(jsonBody)
+        print(message)
         try:
             channel.basic_publish(
                 exchange='',
                 routing_key=queueName,
-                body=jsonBody,
+                body=message.to_json(),
                 properties=pika.BasicProperties(
                     content_type='text/plain',
                     delivery_mode=1

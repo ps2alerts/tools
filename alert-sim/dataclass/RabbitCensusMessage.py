@@ -5,5 +5,5 @@ from dataclasses_json import dataclass_json
 @dataclass
 class RabbitCensusMessage:
     eventName: str
+    worldId: str
     payload: dict
-    worldId: str = '10'
