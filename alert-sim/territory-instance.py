@@ -1,5 +1,5 @@
 import random
-from datetime import datetime, timezone
+from datetime import datetime
 from dataclasses import asdict
 from constants import Loadout, World, Zone
 from dataclass import TerritoryInstance

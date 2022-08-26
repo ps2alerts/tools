@@ -2,6 +2,7 @@ import sys
 sys.path.append("..") # Adds higher directory to python modules path. This is so dumb.
 
 from pika.adapters.blocking_connection import BlockingChannel
+from datetime import datetime
 from constants import MetagameEventType, MetagameEventState
 from dataclass import TerritoryInstance
 from events import MetagameEvent
@@ -20,6 +21,7 @@ class MetagameEventOps:
             'started',
             str(instance.world.value),
             str(instance.zone.value),
+            str(int(datetime.fromisoformat(instance.timeStarted).timestamp()))
         )
 
         print(metagameEvent.to_json())
