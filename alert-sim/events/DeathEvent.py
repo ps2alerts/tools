@@ -1,7 +1,9 @@
 from dataclasses import dataclass
+from dataclasses_json import dataclass_json
 from datetime import datetime, timezone
 
-@dataclass(unsafe_hash=True, frozen=True)
+@dataclass_json
+@dataclass
 class DeathEvent:
     event_name = 'Death'
     attacker_character_id: str = '5428010618035323201' # Maelstrome26
@@ -17,6 +19,3 @@ class DeathEvent:
     vehicle_id: str = '0' # Dead value, never emitted by Census
     world_id: str = '10' # Miller
     zone_id: str = '2' # Indar
-
-    def to_json(self):
-        return jsonpickle.encode(self, unpicklable=False)
