@@ -14,9 +14,14 @@ def main():
 
     channel = RabbitConnection.getChannel()
 
+    instance = TerritoryInstance(
+        censusInstanceId=random.randint(123, 99999),
+        world=World.MILLER,
+        zone=Zone.INDAR,
+        timeStarted=datetime.now().isoformat()
+    )
+
     MetagameEventOps.startTerritoryInstance(instance, channel)
-    print('Waiting 10s...')
-    sleep(10)
     MetagameEventOps.endTerritoryInstance(instance, channel)
     print('Finished!')
 
