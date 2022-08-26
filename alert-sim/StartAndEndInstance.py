@@ -39,7 +39,6 @@ def main():
     log.info('Finished!')
 
 def generateDeaths(instance: TerritoryInstance):
-    # Indexes are important here, attacker #0 will kill victim #0
     cases = [
         {
             attacker: 5428010618035323201, # [DIG] Maelstrome26
