@@ -29,3 +29,5 @@ class MetagameEventOps:
             channel,
             metagameEvent.to_json()
         )
+
+        print('Metagame Published!')
