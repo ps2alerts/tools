@@ -1,3 +1,3 @@
 #!/bin/sh
 
-pipenv run python3 territory-instance.py
+pipenv run python3 StartAndEndInstance.py
