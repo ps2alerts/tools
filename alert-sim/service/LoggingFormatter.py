@@ -8,14 +8,15 @@ class LoggingFormatter(logging.Formatter):
     red = "\033[31m"
     bold_red = "\033[31;1m"
     reset = "\033[0m"
-    format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
+    format = "[%(asctime)s - %(name)s - %(levelname)s] %(message)s"
+    filename = "(%(filename)s:%(lineno)d)"
 
     FORMATS = {
         logging.DEBUG: grey + format + reset,
         logging.INFO: green + format + reset,
         logging.WARNING: yellow + format + reset,
-        logging.ERROR: red + format + reset,
-        logging.CRITICAL: bold_red + format + reset
+        logging.ERROR: red + format + filename  + reset,
+        logging.CRITICAL: bold_red + format + filename + reset
     }
 
     def format(self, record):

@@ -33,10 +33,8 @@ class RabbitConnection:
     def declareQueue(self, queueName: str):
         ret: frame.Method = self._channel.queue_declare(queue=queueName, passive=True)
         if type(ret.method) != spec.Queue.DeclareOk:
-            log.critical("Queue does not exist!")
-            print(ret)
+            log.critical(f"Queue does not exist! {ret}")
             return
-        log.debug('Queue ' + queueName + ' declared!')
 
     def publishMessage(
         self,
@@ -44,7 +42,7 @@ class RabbitConnection:
         message: RabbitCensusMessage
     ):
         log.debug("Publishing event:")
-        log.debug(message)
+        log.debug(repr(message.to_json()))
         try:
             self._channel.basic_publish(
                 exchange='',

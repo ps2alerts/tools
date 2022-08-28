@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from dataclass import RabbitCensusMessage
 from service import Logger, RabbitConnection
 from events import StreamEvent
@@ -14,14 +15,14 @@ class RabbitService:
         event: StreamEvent,
         queueName: str
     ):
-        log.debug(f"Sending message to Rabbit queue {queueName}:\n{event.to_json()}")
+        log.debug(f"Sending message to Rabbit queue {queueName}")
 
         self._connection.declareQueue(queueName)
 
         message = RabbitCensusMessage(
             event.event_name,
             event.world_id,
-            event.to_json()
+            event
         )
 
         self._connection.publishMessage(
