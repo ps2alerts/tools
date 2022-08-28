@@ -99,7 +99,9 @@ def nexus_alert(world: int, instance: int):
             to_capture = random.choice(nexus.get_capturable(team))
             old_faction = nexus.get_region(to_capture).faction
             nexus.capture(to_capture, team)
-            outfit_id = str(RED_OUTFIT if team == Team.RED else BLUE_OUTFIT)
+            # it appears from the PTS match that outfits might not get credit for captures. 
+            # Now that we have team id, we can compensate for that on our side ^.^
+            outfit_id = "0" #str(RED_OUTFIT if team == Team.RED else BLUE_OUTFIT)
             facility_control = FacilityControlEvent(
                 facility_id=str(to_capture),
                 zone_id=str(zone_id),
