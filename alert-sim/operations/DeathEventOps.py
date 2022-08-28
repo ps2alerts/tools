@@ -10,7 +10,7 @@ class DeathEventOps:
     worldFactionCharacters = {
         10: {
             1: [
-                428010618035323201, # [DIG] Maelstrome26
+                5428010618035323201, # [DIG] Maelstrome26
                 5428026242699274033, # [DIGT] Heregas
                 8271049455856574177, # [DIGT] Knaroef
                 5428997767890749329, # [KOTV] MoaniestMangoo
