@@ -49,8 +49,10 @@ def death_worker(interval: float, event: OutfitwarsInstance) -> Tuple[Thread, Ev
                 attacker_character_id=str(attacker), 
                 attacker_loadout_id=str(int(random.choice(classes[attacker]))), 
                 attacker_weapon_id=str(weapons[attacker]),
+                attacker_team_id='2' if attacker == BLUE_PLAYER else '3',
                 character_id=str(victim),
                 character_loadout_id=str(int(random.choice(classes[victim]))),
+                team_id='2' if victim == BLUE_PLAYER else '3',
                 world_id=str(event.world),
                 zone_id=(int(event.zoneInstanceId) << 16) | int(event.zone)
             )
