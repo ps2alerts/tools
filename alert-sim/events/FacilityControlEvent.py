@@ -9,10 +9,10 @@ from .StreamEvent import StreamEvent
 class FacilityControlEvent(StreamEvent):
     facility_id: str
     zone_id: str
+    timestamp: str = ''  # post_init will set this to the current timestamp if not set
     world_id: str = "10" # Miller
     event_name: str = 'FacilityControl'
     duration_held: str = "0"
-    timestamp: str = str(int(datetime.now().timestamp()))
     old_faction_id: str = "2" # NC
     new_faction_id: str = "3" # TR
     outfit_id: str = "0"

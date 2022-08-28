@@ -13,7 +13,7 @@ class MetagameEvent(StreamEvent):
     metagame_event_state_name: str
     world_id: str
     zone_id: str
-    timestamp: str = str(int(datetime.now().timestamp()))
+    timestamp: str = ''  # post_init will set this to the current timestamp if not set
     event_name: str = 'MetagameEvent'
     experience_bonus: str = '0'
     faction_vs: str = '33'
