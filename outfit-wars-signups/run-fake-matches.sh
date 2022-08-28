@@ -7,4 +7,4 @@ else
     source .venv/bin/activate
 fi
 
-python rake_matches.yp
+python fake_matches.py
