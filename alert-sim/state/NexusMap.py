@@ -27,7 +27,7 @@ class NexusMap:
                     self._regions[link_id].links.append(facility_id)
 
     def capture(self, facility_id: int, team: Team):
-        self._regions[str(facility_id)]["faction"] = team
+        self._regions[str(facility_id)].faction = team
 
     def get_capturable(self, team: Team) -> List[str]:
         to_return = []
@@ -35,11 +35,11 @@ class NexusMap:
             if facility_id in ["310560", "310570"]:
                 # warpgates are not capturable
                 continue
-            if self._regions[facility_id]["faction"] == team:
+            if self._regions[facility_id].faction == team:
                 # Cannot capture your own bases
                 continue
-            for link_id in self._regions[facility_id]["links"]:
-                if self._regions[link_id]["faction"] == team:
+            for link_id in self._regions[facility_id].links:
+                if self._regions[link_id].faction == team:
                     # Have a connected base? Capturable
                     to_return.append(facility_id)
         return to_return
@@ -56,11 +56,11 @@ class NexusMap:
         for facility_id in self._regions:
             if facility_id in ["310560", "310570"]:
                 continue
-            if self._regions[facility_id]["faction"] == Team.RED:
+            if self._regions[facility_id].faction == Team.RED:
                 red_bases += 1
-            elif self._regions[facility_id]["faction"] == Team.BLUE:
+            elif self._regions[facility_id].faction == Team.BLUE:
                 blue_bases += 1
-            elif self._regions[facility_id]["faction"] == Team.NONE:
+            elif self._regions[facility_id].faction == Team.NONE:
                 ns_bases += 1
         return MapControl(
             0,
