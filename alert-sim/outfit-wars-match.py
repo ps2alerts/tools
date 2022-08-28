@@ -52,7 +52,7 @@ def death_worker(interval: float, event: OutfitwarsInstance) -> Tuple[Thread, Ev
                 character_id=str(victim),
                 character_loadout_id=str(int(random.choice(classes[victim]))),
                 world_id=str(event.world),
-                zone_id=str((int(event.zoneInstanceId) << 16) | int(event.zone))
+                zone_id=(int(event.zoneInstanceId) << 16) | int(event.zone)
             )
             thread_rabbit.send(death, death_queue)
     thread = Thread(target=work)
@@ -81,7 +81,7 @@ def nexus_alert(world: int, instance: int):
         zone_id=(int(event.zoneInstanceId) << 16) | event.zone,
         faction_vs='0',
         faction_nc='50',
-        faction_tr='50'
+        faction_tr='50',
     )
     rabbit.send(metagame_event, metagame_event_queue)
     death_thread, death_stop_event = death_worker(1.0, event)
@@ -91,7 +91,7 @@ def nexus_alert(world: int, instance: int):
         captures = MAX_CAPTURES
         fac_control_queue = f'aggregator-outfitwars-{int(event.world)}-{int(event.zone)}-{event.zoneInstanceId}-FacilityControl'
         death_thread.start()
-        while to_capture not in [310610, 310600] and captures > 0:
+        while to_capture not in ['310610', '310600'] and captures > 0:
             sleep(5)
             team = random.choice([Team.BLUE, Team.RED])
             to_capture = random.choice(nexus.get_capturable(team))
@@ -104,7 +104,7 @@ def nexus_alert(world: int, instance: int):
                 world_id=str(int(event.world)),
                 old_faction_id=str(int(old_faction)),
                 new_faction_id=str(int(team)),
-                outfit_id=outfit_id
+                outfit_id=outfit_id,
             )
             rabbit.send(facility_control, fac_control_queue)
             captures -= 1
