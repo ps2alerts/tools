@@ -25,5 +25,5 @@ class OutfitwarsInstance:
     features = {'captureHistory': True, 'xpm': True}
 
     def __post_init__(self):
-        self.instanceId = 'outfitwars-'+str(self.world.value)+'-'+str(self.zone.value)+'-'+self.zoneInstanceId
+        self.instanceId = 'outfitwars-'+str(int(self.world))+'-'+str(int(self.zone))+'-'+self.zoneInstanceId
         self.mapVersion = '1.1' if self.zone == Zone.OSHUR else '1.0'

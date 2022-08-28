@@ -64,7 +64,7 @@ def nexus_alert(world: int, instance: int):
     zone_id = (instance << 16) | 10
     event = OutfitwarsInstance(
         censusInstanceId=random.randint(1, 123),
-        zoneInstanceId=instance,
+        zoneInstanceId=str(instance),
         world=world,
         zone=10,
         timeStarted=datetime.now(),
@@ -84,12 +84,12 @@ def nexus_alert(world: int, instance: int):
         faction_tr='50'
     )
     rabbit.send(metagame_event, metagame_event_queue)
+    death_thread, death_stop_event = death_worker(1.0, event)
     try:
         nexus = NexusMap(zone_id & 0xFFFF)
-        death_thread, death_stop_event = death_worker(1.0, event)
         to_capture = 0
         captures = MAX_CAPTURES
-        fac_control_queue = f'aggregator-outfitwars-{event.world.value}-{event.zone.value}-{event.zoneInstanceId}-FacilityControl'
+        fac_control_queue = f'aggregator-outfitwars-{int(event.world)}-{int(event.zone)}-{event.zoneInstanceId}-FacilityControl'
         death_thread.start()
         while to_capture not in [310610, 310600] and captures > 0:
             sleep(5)
@@ -122,7 +122,8 @@ def nexus_alert(world: int, instance: int):
             faction_tr='50'
         )
         death_stop_event.set()
-        death_thread.join()
+        if death_thread.is_alive():
+            death_thread.join()
         rabbit.send(metagame_end_event, metagame_event_queue)
 
 # Simple simulator that fakes an alert on Nexus with a bunch of random (possible) captures
