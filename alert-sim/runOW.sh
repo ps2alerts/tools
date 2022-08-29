@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if [[ $# -ne 2 ]]; then
+    echo "Usage: runOW.sh <service-id>"
+    exit 1
+fi
+
 # Edit these values to adjust scenarios
 RED_OUTFIT="37581466630125066"  # LCOF
 BLUE_OUTFIT="37575759950005295" # TTA
