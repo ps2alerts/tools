@@ -1,4 +1,5 @@
 from .Loadout import Loadout
+from .Faction import Faction
 
 class Classes:
     TR_CLASSES = [
@@ -36,3 +37,14 @@ class Classes:
         Loadout.HEAVY_NSO,
         Loadout.MAX_NSO
     ]
+
+    def by_faction(f: Faction):
+        if f == Faction.VS:
+            return Classes.VS_CLASSES
+        if f == Faction.NC:
+            return Classes.NC_CLASSES
+        if f == Faction.TR:
+            return Classes.TR_CLASSES
+        if f == Faction.NSO:
+            return Classes.NSO_CLASSES
+        raise ValueError(f"Faction {f} does not exist!")

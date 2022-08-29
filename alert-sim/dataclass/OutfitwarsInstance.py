@@ -1,9 +1,27 @@
+from auraxium import ps2
+
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from datetime import datetime
 from typing import Optional
-from constants import AlertState, Ps2alertsEventType, World, Zone
-from .MetagameResult import MetagameResult
+from constants import AlertState, Ps2alertsEventType, World, Zone, Faction
+from .MetagameResult import MetagameResult    
+
+@dataclass_json
+@dataclass
+class Outfit:
+    id: int
+    name: str
+    faction: Faction
+    alias: Optional[str]
+
+
+@dataclass_json
+@dataclass
+class Teams:
+    red: Outfit
+    blue: Outfit
+
 
 @dataclass_json
 @dataclass
@@ -15,6 +33,7 @@ class OutfitwarsInstance:
     timeStarted: datetime
     phase: int
     round: int
+    teams: Teams
     instanceId: str = ''
     timeEnded: Optional[datetime] = None
     result: MetagameResult = MetagameResult(33, 33, 33, 0, 0)
