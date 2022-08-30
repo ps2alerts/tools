@@ -1,3 +1,4 @@
+from pathlib import Path
 import requests
 from typing import Dict, List
 
@@ -9,9 +10,14 @@ from .Region import Region
 
 class NexusMap:
     def __init__(self, zone_id: int, version: str = "1.0"):
-        response = requests.get(str(AppConfig.apiBaseUrl / "census" / "regions" / str(zone_id) / version), verify=False)
+        response = requests.get(str(AppConfig.apiBaseUrl / "census" / "regions" / str(zone_id) / version), verify=Path("~/ps2alerts/certs/CA.pem").expanduser())
         assert 200 <= response.status_code <= 299, "Failed to retrieve map data"
         data = response.json()
+        self._region_counts = {
+            Team.NONE: 0,
+            Team.BLUE: 0,
+            Team.RED: 0
+        }
         self._regions: Dict[str, Region] = {}
         for region in data["map_region_list"]:
             self._regions[region["facility_id"]] = Region(
@@ -21,13 +27,20 @@ class NexusMap:
                        else Team.RED  if int(region["facility_id"]) in Nexus.INIT_RED_REGIONS
                        else Team.NONE)
             )
+            self._region_counts[self._regions[region["facility_id"]].faction] += 1
+
         for facility_id in self._regions:
             for link_id in self._regions[facility_id].links:
                 if facility_id not in self._regions[link_id].links:
                     self._regions[link_id].links.append(facility_id)
 
     def capture(self, facility_id: int, team: Team):
+        self._region_counts[self._regions[str(facility_id)].faction] -= 1
+        self._region_counts[team] += 1
         self._regions[str(facility_id)].faction = team
+
+    def count(self, team: Team):
+        return self._region_counts[team]
 
     def get_capturable(self, team: Team) -> List[str]:
         to_return = []

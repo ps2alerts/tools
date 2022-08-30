@@ -1,6 +1,6 @@
 from datetime import datetime
 from time import sleep
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 from threading import Event, Thread
 from argparse import ArgumentParser
 
@@ -12,10 +12,10 @@ import random
 from constants import Team, Classes, MetagameEventType, MetagameEventState, Faction
 from dataclass import OutfitwarsInstance, Outfit, Teams
 from events import MetagameEvent, DeathEvent, FacilityControlEvent
-from service import rabbit, RabbitConnection, RabbitService, Logger
+from service import get_rabbit, RabbitConnection, RabbitService, Logger
 from state import NexusMap
 
-logger = Logger.getLogger()
+logger = Logger.getLogger("Match")
 
 #BLUE_OUTFIT = 37571208657592881 # [HMRD]
 #RED_OUTFIT = 37570391403474491  # [UN17]
@@ -26,6 +26,23 @@ NC_WEAPON = 7169 # GD-7F
 TR_WEAPON = 7254 # MSW-R
 NSO_WEAPON = 6009899 # XMG-100
 
+tiebreaker_points = { Team.RED: 0, Team.BLUE: 0 }
+tbpool = 500
+
+def tiebreaker_worker(interval: float, nexus: NexusMap) -> Tuple[Thread, Event]:
+    stop = Event()
+    def work():
+        global tiebreaker_points, tbpool
+        while not stop.wait(interval):
+            for team in tiebreaker_points:
+                points = nexus.count(team) * 2
+                if points > tbpool:
+                    points = tbpool
+                tiebreaker_points[team] += points
+                tbpool -= points
+    thread = Thread(target=work)
+    return thread, stop
+        
 
 def death_worker(
         interval: float, 
@@ -88,7 +105,7 @@ def nexus_alert(
     },
     capture_rate: int = 5,
     death_rate: float = 0.5,
-    first_death_delay: float = 0.0):
+    first_death_delay: float = 0.0) -> Optional[Tuple[Team, Dict[Team, int]]]:
     
     metagame_event_queue = f'aggregator-{world}-MetagameEvent'
 
@@ -119,13 +136,19 @@ def nexus_alert(
         faction_nc=str(faction_blue),
         faction_tr=str(faction_red),
     )
+    rabbit = get_rabbit()
     rabbit.send(metagame_event, metagame_event_queue)
-    death_thread, death_stop_event = death_worker(death_rate, event, members, first_death_delay)
+    death_thread, death_stop_event = None, None
+    tb_thread, tb_stop_event = None, None
+    nexus = None
     try:
         nexus = NexusMap(zone_id & 0xFFFF)
         to_capture = 0
         captures = MAX_CAPTURES
         fac_control_queue = f'aggregator-outfitwars-{int(event.world)}-{int(event.zone)}-{event.zoneInstanceId}-FacilityControl'
+        death_thread, death_stop_event = death_worker(death_rate, event, members, first_death_delay)
+        tb_thread, tb_stop_event = tiebreaker_worker(60, nexus)
+        tb_thread.start()
         death_thread.start()
         while to_capture not in ['310610', '310600'] and captures > 0:
             sleep(capture_rate)
@@ -151,7 +174,10 @@ def nexus_alert(
             )
             rabbit.send(facility_control, fac_control_queue)
             captures -= 1
-
+        
+        if to_capture in ['310610', '310600']:
+            tiebreaker_points[team] += tbpool
+            tbpool = 0
     finally:
         metagame_end_event = MetagameEvent(
             instance_id=str(event.censusInstanceId), 
@@ -161,13 +187,29 @@ def nexus_alert(
             world_id=str(int(event.world)),
             zone_id=(int(event.zoneInstanceId) << 16) | event.zone,
             faction_vs='0',
-            faction_nc='50',
-            faction_tr='50'
+            faction_nc=str(faction_blue),
+            faction_tr=str(faction_red),
         )
-        death_stop_event.set()
-        if death_thread.is_alive():
-            death_thread.join()
+        if death_stop_event and death_thread:
+            death_stop_event.set()
+            if death_thread.is_alive():
+                death_thread.join()
+
+        if tb_stop_event and tb_thread:
+            tb_stop_event.set()
+            if tb_thread.is_alive():
+                tb_thread.join()
+        
         rabbit.send(metagame_end_event, metagame_event_queue)
+        if nexus:
+            points = {
+                Team.RED: tiebreaker_points[Team.RED], 
+                Team.BLUE: tiebreaker_points[Team.BLUE]
+            }
+            winner = Team.RED if nexus.count(Team.RED) > nexus.count(Team.BLUE) else Team.BLUE
+            points[winner] += 10000
+            return winner, points
+    
 
 async def build_outfit_data(service_id: str, red_outfit_id: int, blue_outfit_id: int):
     if not service_id.startswith("s:"):
@@ -205,6 +247,15 @@ async def build_outfit_data(service_id: str, red_outfit_id: int, blue_outfit_id:
     return Teams(red_outfit_data, blue_outfit_data), character_ids
 
 
+def start_alert(teams: Teams, members: Dict[int, List], world: int, instance: int, capture_rate: int, death_rate: float, death_delay: float):
+    
+    logger.info(f"Starting alert on world {world}, zone instance {instance}")
+    result = nexus_alert(world, instance, teams, members, capture_rate, death_rate, death_delay)
+    logger.info(f"Finished alert on world {world}, zone instance {instance}")
+    if result is not None:
+        logger.info(f"Winner was team {result[0].name.capitalize()}")
+    return instance, result
+
 # Simulator that fakes an alert on Nexus with a bunch of random (possible) captures
 #   Basically intended to test out various scenarios that could happen with outfit wars
 def main():
@@ -223,13 +274,10 @@ def main():
         teams, members = asyncio.get_event_loop().run_until_complete(build_outfit_data(args.service_id, args.red_outfit_id, args.blue_outfit_id))
     except ValueError as e:
         logger.error(str(e))
-        return 1
+        exit(1)
+
+    start_alert(teams, members, args.world, random.randint(0, 0xFFFF), args.capture_rate, args.death_rate, args.death_delay)
     
-    world = args.world
-    instance = random.randint(0, 0xFFFF)
-    logger.info(f"Starting alert on world {world}, zone instance {instance}")
-    nexus_alert(world, instance, teams, members, args.capture_rate, args.death_rate, args.death_delay)
-    logger.info(f"Finished alert on world {world}, zone instance {instance}")
 
 if __name__ == "__main__":
     main()

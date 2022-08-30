@@ -1,19 +1,20 @@
 from datetime import datetime
+from logging import INFO
 from pika.adapters.blocking_connection import BlockingChannel
 from time import sleep
 
 from constants import AlertState, MetagameEventType, MetagameEventState
 from dataclass import TerritoryInstance
 from events import MetagameEvent
-from service import Logger, rabbit
-log = Logger.getLogger()
+from service import Logger, get_rabbit
+log = Logger.getLogger("MetagameEventOps", INFO)
 from .Ps2AlertsApiOps import Ps2AlertsApiOps
 
 class MetagameEventOps:
     def startTerritoryInstance(instance: TerritoryInstance, channel: BlockingChannel):
         log.info('Starting Territory instance')
         queueName = f'aggregator-{instance.world}-MetagameEvent'
-
+        rabbit = get_rabbit()
         metagameEvent = MetagameEvent(
             str(instance.censusInstanceId),
             str(MetagameEventType.INDAR_ENLIGHTENMENT.value),
@@ -35,7 +36,7 @@ class MetagameEventOps:
     def endTerritoryInstance(instance: TerritoryInstance, channel: BlockingChannel):
         log.info('Ending Territory instance')
         queueName = f'aggregator-{instance.world}-MetagameEvent'
-
+        rabbit = get_rabbit()
         metagameEvent = MetagameEvent(
             str(instance.censusInstanceId),
             str(MetagameEventType.INDAR_ENLIGHTENMENT.value),

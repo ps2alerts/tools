@@ -1,6 +1,7 @@
+from logging import DEBUG
 from .Ps2AlertsApiOps import Ps2AlertsApiOps
 from service import Logger
-log = Logger.getLogger()
+log = Logger.getLogger("PreflightChecksOps", DEBUG)
 
 class PreflightChecksOps:
     def run():

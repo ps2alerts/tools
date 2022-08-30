@@ -2,7 +2,7 @@ import logging
 
 class LoggingFormatter(logging.Formatter):
 
-    grey = "\033[37m"
+    grey = "\033[90m"
     green = "\033[32m"
     yellow = "\033[93m"
     red = "\033[31m"

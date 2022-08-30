@@ -5,7 +5,7 @@ urllib3.disable_warnings() # Turn off the SSL verification warning log spam
 
 from AppConfig import AppConfig
 from service import Logger
-log = Logger.getLogger()
+log = Logger.getLogger("Ps2AlertsApiOps")
 
 class Ps2AlertsApiOps:
     def get(path, query=None):

@@ -8,7 +8,7 @@ from pika.exceptions import UnroutableError
 
 from dataclass import RabbitCensusMessage
 from service import Logger
-log = Logger.getLogger()
+log = Logger.getLogger("RabbitConnection")
 
 class RabbitConnection:
     _channel: Optional[BlockingChannel] = None

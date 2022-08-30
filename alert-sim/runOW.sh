@@ -22,4 +22,4 @@ else
     source .venv/bin/activate
 fi
 
-python outfit-wars-match.py $1 -r $RED_OUTFIT -b $BLUE_OUTFIT -w $WORLD -c $CAPTURE_RATE -d $DEATH_RATE -l $DEATH_DELAY
+python outfitwars_match.py $1 -r $RED_OUTFIT -b $BLUE_OUTFIT -w $WORLD -c $CAPTURE_RATE -d $DEATH_RATE -l $DEATH_DELAY

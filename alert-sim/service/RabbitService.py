@@ -1,8 +1,7 @@
-from dataclasses import asdict
 from dataclass import RabbitCensusMessage
 from service import Logger, RabbitConnection
 from events import StreamEvent
-log = Logger.getLogger()
+log = Logger.getLogger("RabbitService")
 
 class RabbitService:
     _connection: RabbitConnection = None
@@ -30,4 +29,10 @@ class RabbitService:
             message
         )
 
-rabbit = RabbitService(RabbitConnection())
+rabbit = None
+def get_rabbit():
+    global rabbit
+    if rabbit:
+        return rabbit
+    rabbit = RabbitService(RabbitConnection())
+    return rabbit

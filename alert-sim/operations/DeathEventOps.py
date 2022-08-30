@@ -1,10 +1,11 @@
+from logging import INFO
 from time import sleep
 from typing import List
 
 from dataclass import TerritoryInstance
 from events import DeathEvent
-from service import Logger, rabbit
-log = Logger.getLogger()
+from service import Logger, get_rabbit
+log = Logger.getLogger("DeathEventOps", INFO)
 
 class DeathEventOps:
     worldFactionCharacters = {
@@ -36,7 +37,7 @@ class DeathEventOps:
     def send(instance: TerritoryInstance, events: List[DeathEvent]):
         log.info('Sending deaths for instance #'+instance.instanceId+'...')
         queueName = f'aggregator-{instance.instanceId}-Death'
-
+        rabbit = get_rabbit()
         for event in events:
             rabbit.send(event, queueName)
 

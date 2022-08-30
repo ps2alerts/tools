@@ -1,5 +1,6 @@
 from dataclasses import asdict
 from datetime import datetime
+from logging import INFO
 import random
 from time import sleep
 
@@ -8,7 +9,7 @@ from dataclass import TerritoryInstance
 from events import DeathEvent
 from operations import DeathEventOps, MetagameEventOps, PreflightChecksOps, Ps2AlertsApiOps
 from service import Logger, RabbitConnection
-log = Logger.getLogger()
+log = Logger.getLogger("StartAndEndInstance", INFO)
 
 def main():
     log.info('Starting scenario...')
