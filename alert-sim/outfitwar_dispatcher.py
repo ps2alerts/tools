@@ -74,13 +74,13 @@ class RankingParams:
     @classmethod
     def from_json(cls, data: dict) -> 'RankingParams':
         return cls(
-            TotalScore = int(data["TotalScore"]),
-            MatchesPlayed = int(data["MatchesPlayed"]),
-            Wins = int(data["Wins"]),
-            Losses = int(data["Losses"]),
-            TiebreakerPoints = int(data["TiebreakerPoints"]),
-            FactionRank = int(data["FactionRank"]),
-            GlobalRank = int(data["GlobalRank"])
+            TotalScore = data["TotalScore"],
+            MatchesPlayed = data["MatchesPlayed"],
+            Wins = data["Wins"],
+            Losses = data["Losses"],
+            TiebreakerPoints = data["TiebreakerPoints"],
+            FactionRank = data["FactionRank"],
+            GlobalRank = data["GlobalRank"]
         )
 
 @dataclass
@@ -145,8 +145,8 @@ def main():
     for red, blue in zip(rankings[::2], rankings[1::2]):
         teams, members = asyncio.get_event_loop().run_until_complete(
             build_outfit_data(
-                args.service_id, 
-                int(red.outfit.id), 
+                args.service_id,
+                int(red.outfit.id),
                 int(blue.outfit.id)
             )
         )
@@ -159,7 +159,7 @@ def main():
     dbclient = pymongo.MongoClient("mongodb://ps2alerts:foobar@localhost:27017/ps2alerts")
     database = dbclient['ps2alerts']
     collection = database['outfitwars_rankings']
-    
+
     for round in range(1, 8):
         logger.info(f"Starting round {round}")
         res = requests.get(
@@ -171,14 +171,14 @@ def main():
         matches: List[Tuple[Ranking, Ranking]] = []
         for i in range(0, len(rankings), 2):
             matches.append((rankings[i], rankings[i + 1]))
-        
+
         if round == 5:
             matches = matches[:4]
         elif round > 5:
             matches = matches[:2]
-        
+
         logger.info(f"Starting {len(matches)} matches")
-        
+
         match_results: List[MatchResult] = []
 
         def match_result_handler(result: Optional[Tuple[int, Tuple[Team, Dict[Team, int]]]]):
@@ -190,7 +190,7 @@ def main():
             winnerRanking = matches[index][0 if winner == Team.RED else 1]
             loserRanking = matches[index][0 if winner == Team.BLUE else 1]
             logger.info(f"{winnerRanking.outfit.tag} won their match against {loserRanking.outfit.tag}!")
-            
+
 
         with Pool(len(matches)) as p:
             results: List[AsyncResult] = []
@@ -207,17 +207,17 @@ def main():
                         callback=match_result_handler
                     )
                 )
-            
+
             for result in results:
                 result.get()
-            
+
         logger.info("All matches finished, updating results")
         round_winner_points = 10000
         if round > 4:
             round_winner_points = 100000
         if round > 6:
             round_winner_points = 1000000
-        
+
         for match_result in match_results:
             if match_result.winner == Team.RED:
                 match_result.red.rankingParameters.Wins += 1
@@ -228,7 +228,7 @@ def main():
 
             match_result.red.rankingParameters.MatchesPlayed += 1
             match_result.blue.rankingParameters.MatchesPlayed += 1
-            
+
             match_result.red.rankingParameters.TiebreakerPoints += match_result.points[Team.RED]
             match_result.blue.rankingParameters.TiebreakerPoints += match_result.points[Team.BLUE]
 
@@ -244,12 +244,12 @@ def main():
             rankings[i].timestamp = datetime.now()
             logger.info(f"    {len(rankings) - i}. [{rankings[i].outfit.tag}] {rankings[i].outfit.name} {rankings[i].rankingParameters.Wins}/{rankings[i].rankingParameters.Losses}/{rankings[i].rankingParameters.TiebreakerPoints}")
 
-        
-        logger.info("Inserting new round rankings...")    
+
+        logger.info("Inserting new round rankings...")
         collection.insert_many([ranking.to_json() for ranking in rankings])
         logger.info("Inserted new round rankings!")
 
-        
+
 
 if __name__ == "__main__":
     main()
