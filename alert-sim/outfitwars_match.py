@@ -206,8 +206,7 @@ def nexus_alert(
                 Team.RED: tiebreaker_points[Team.RED], 
                 Team.BLUE: tiebreaker_points[Team.BLUE]
             }
-            winner = Team.RED if nexus.count(Team.RED) > nexus.count(Team.BLUE) else Team.BLUE
-            points[winner] += 10000
+            winner = Team.RED if nexus.territory(Team.RED) > nexus.territory(Team.BLUE) else Team.BLUE
             return winner, points
     
 

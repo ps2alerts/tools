@@ -212,6 +212,11 @@ def main():
                 result.get()
             
         logger.info("All matches finished, updating results")
+        round_winner_points = 10000
+        if round > 4:
+            round_winner_points = 100000
+        if round > 6:
+            round_winner_points = 1000000
         
         for match_result in match_results:
             if match_result.winner == Team.RED:
@@ -224,11 +229,12 @@ def main():
             match_result.red.rankingParameters.MatchesPlayed += 1
             match_result.blue.rankingParameters.MatchesPlayed += 1
             
-            match_result.red.rankingParameters.TiebreakerPoints += match_result.points[Team.RED] - 10000 if match_result.winner == Team.RED else match_result.points[Team.RED]
-            match_result.blue.rankingParameters.TiebreakerPoints += match_result.points[Team.BLUE] - 10000 if match_result.winner == Team.BLUE else match_result.points[Team.BLUE]
+            match_result.red.rankingParameters.TiebreakerPoints += match_result.points[Team.RED]
+            match_result.blue.rankingParameters.TiebreakerPoints += match_result.points[Team.BLUE]
 
-            match_result.red.rankingParameters.TotalScore += match_result.points[Team.RED]
-            match_result.blue.rankingParameters.TotalScore += match_result.points[Team.BLUE]
+
+            match_result.red.rankingParameters.TotalScore += match_result.points[Team.RED] + (round_winner_points if match_result.winner == Team.RED else 0)
+            match_result.blue.rankingParameters.TotalScore += match_result.points[Team.BLUE] + (round_winner_points if match_result.winner == Team.BLUE else 0)
 
         logger.info("The current rankings are:")
         rankings.sort(key=lambda x: x.rankingParameters.TotalScore)
@@ -239,10 +245,9 @@ def main():
             logger.info(f"    {len(rankings) - i}. [{rankings[i].outfit.tag}] {rankings[i].outfit.name} {rankings[i].rankingParameters.Wins}/{rankings[i].rankingParameters.Losses}/{rankings[i].rankingParameters.TiebreakerPoints}")
 
         
-        if round != 7:
-            logger.info("Inserting new round rankings...")    
-            collection.insert_many([ranking.to_json() for ranking in rankings])
-            logger.info("Inserted new round rankings!")
+        logger.info("Inserting new round rankings...")    
+        collection.insert_many([ranking.to_json() for ranking in rankings])
+        logger.info("Inserted new round rankings!")
 
         
 

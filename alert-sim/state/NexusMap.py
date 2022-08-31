@@ -41,6 +41,23 @@ class NexusMap:
 
     def count(self, team: Team):
         return self._region_counts[team]
+    
+    def territory(self, team: Team):
+        if team == Team.BLUE:
+            stack = ["310560"]
+        else:
+            stack = ["310570"]
+        count = 0
+        visited = []
+        while len(stack) > 0:
+            to_visit = stack.pop()
+            facility = self._regions[to_visit]
+            visited.append(to_visit)
+            for region in facility.links:
+                if self._regions[region].faction == facility.faction and region not in visited:
+                    stack.append(region)
+                    count += 1
+        return count
 
     def get_capturable(self, team: Team) -> List[str]:
         to_return = []
