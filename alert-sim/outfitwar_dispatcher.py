@@ -139,6 +139,7 @@ def main():
     parser.add_argument("--capture-rate", "-c", type=int, default=120, help="Number of seconds between captures")
     parser.add_argument("--death-rate", "-d", type=float, default=0.5, help="Number of seconds between deaths")
     parser.add_argument("--vehicle-destroy-rate", "-v", type=float, default=10.0, help="Number of seconds between vehicle destroys")
+    parser.add_argument("--rounds", "-r", type=int, choices=range(1, 8), default=7, help="How many rounds to run")
     args = parser.parse_args()
 
     res = requests.get(
@@ -167,7 +168,7 @@ def main():
     database = dbclient['ps2alerts']
     collection = database['outfitwars_rankings']
 
-    for round in range(1, 8):
+    for round in range(1, args.rounds + 1):
         logger.info(f"Starting round {round}")
         res = requests.get(
             f"{HOST}/outfit-wars/rankings?world={args.world}&round={round}&sortBy=rankingParameters.GlobalRank&order=desc",
