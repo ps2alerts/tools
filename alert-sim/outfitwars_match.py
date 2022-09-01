@@ -49,13 +49,13 @@ def tiebreaker_worker(interval: float, nexus: NexusMap) -> Tuple[Thread, Event]:
                 tbpool -= points
     thread = Thread(target=work)
     return thread, stop
-        
+
 
 def vehicle_destroy_worker(
-        interval: float, 
-        event: OutfitwarsInstance, 
+        interval: float,
+        event: OutfitwarsInstance,
         players: Dict[int, List[int]] = {
-            37571208657592881: [5428085259783352737], 
+            37571208657592881: [5428085259783352737],
             37570391403474491: [5428297992006446465, 5428985062301123025]
         },
         delay: float = 0
@@ -102,10 +102,10 @@ def vehicle_destroy_worker(
 
 
 def death_worker(
-        interval: float, 
-        event: OutfitwarsInstance, 
+        interval: float,
+        event: OutfitwarsInstance,
         players: Dict[int, List[int]] = {
-            37571208657592881: [5428085259783352737], 
+            37571208657592881: [5428085259783352737],
             37570391403474491: [5428297992006446465, 5428985062301123025]
         },
         delay: float = 0
@@ -129,8 +129,8 @@ def death_worker(
             victimOutfit = event.teams.red if event.teams.red.id == victimOutfitId else event.teams.blue
             victim = random.choice(players[victimOutfitId])
             death = DeathEvent(
-                attacker_character_id=str(attacker), 
-                attacker_loadout_id=str(int(random.choice(Classes.by_faction(attackerOutfit.faction)))), 
+                attacker_character_id=str(attacker),
+                attacker_loadout_id=str(int(random.choice(Classes.by_faction(attackerOutfit.faction)))),
                 attacker_weapon_id=str(weapons[attackerOutfit.faction]),
                 attacker_team_id='2' if attackerOutfitId == event.teams.blue.id else '3',
                 character_id=str(victim),
@@ -145,11 +145,11 @@ def death_worker(
     return thread, stop
 
 def nexus_alert(
-    world: int, 
-    instance: int, 
+    world: int,
+    instance: int,
     teams: Teams = Teams(
-        Outfit(37570391403474491, name="Un1ty", faction=Faction.TR, alias="UN17"), 
-        Outfit(37571208657592881, name="Drunk Division  ", faction=Faction.TR, alias="HMRD")
+        Outfit(37570391403474491, name="Un1ty", faction=Faction.TR, alias="UN17"),
+        Outfit(37571208657592881, name="Drunk Division", faction=Faction.TR, alias="HMRD")
     ),
     members: Dict[int, List[int]] = {
         37570391403474491: [5428297992006446465, 5428985062301123025],
@@ -160,7 +160,7 @@ def nexus_alert(
     first_death_delay: float = 0.0,
     vehicle_destroy_rate: float = 30.0,
     vehicle_destroy_delay: float = 0.0) -> Optional[Tuple[Team, Dict[Team, int]]]:
-    
+
     metagame_event_queue = f'aggregator-{world}-MetagameEvent'
 
     zone_id = (instance << 16) | 10
@@ -180,9 +180,9 @@ def nexus_alert(
     faction_red = 100 - faction_blue
 
     metagame_event = MetagameEvent(
-        instance_id=str(event.censusInstanceId), 
-        metagame_event_id=str(int(MetagameEventType.NEXUS_OUTFIT_WAR)), 
-        metagame_event_state=str(int(MetagameEventState.STARTED)), 
+        instance_id=str(event.censusInstanceId),
+        metagame_event_id=str(int(MetagameEventType.NEXUS_OUTFIT_WAR)),
+        metagame_event_state=str(int(MetagameEventState.STARTED)),
         metagame_event_state_name="started",
         world_id=str(int(event.world)),
         zone_id=(int(event.zoneInstanceId) << 16) | event.zone,
@@ -213,7 +213,7 @@ def nexus_alert(
             to_capture = random.choice(nexus.get_capturable(team))
             old_faction = nexus.get_region(to_capture).faction
             nexus.capture(to_capture, team)
-            # it appears from the PTS match that outfits might not get credit for captures. 
+            # it appears from the PTS match that outfits might not get credit for captures.
             # Now that we have team id, we can compensate for that on our side ^.^
             if team == Team.BLUE and event.teams.blue.faction == Team.BLUE:
                 outfit_id = str(event.teams.blue.id)
@@ -231,15 +231,15 @@ def nexus_alert(
             )
             rabbit.send(facility_control, fac_control_queue)
             captures -= 1
-        
+
         if to_capture in ['310610', '310600']:
             tiebreaker_points[team] += tbpool
             tbpool = 0
     finally:
         metagame_end_event = MetagameEvent(
-            instance_id=str(event.censusInstanceId), 
-            metagame_event_id=str(int(MetagameEventType.NEXUS_OUTFIT_WAR)), 
-            metagame_event_state=str(int(MetagameEventState.FINISHED)), 
+            instance_id=str(event.censusInstanceId),
+            metagame_event_id=str(int(MetagameEventType.NEXUS_OUTFIT_WAR)),
+            metagame_event_state=str(int(MetagameEventState.FINISHED)),
             metagame_event_state_name="ended",
             world_id=str(int(event.world)),
             zone_id=(int(event.zoneInstanceId) << 16) | event.zone,
@@ -251,7 +251,7 @@ def nexus_alert(
             death_stop_event.set()
             if death_thread.is_alive():
                 death_thread.join()
-        
+
         if vehicle_destroy_stop_event and vehicle_destroy_thread:
             vehicle_destroy_stop_event.set()
             if vehicle_destroy_thread.is_alive():
@@ -261,16 +261,16 @@ def nexus_alert(
             tb_stop_event.set()
             if tb_thread.is_alive():
                 tb_thread.join()
-        
+
         rabbit.send(metagame_end_event, metagame_event_queue)
         if nexus:
             points = {
-                Team.RED: tiebreaker_points[Team.RED], 
+                Team.RED: tiebreaker_points[Team.RED],
                 Team.BLUE: tiebreaker_points[Team.BLUE]
             }
             winner = Team.RED if nexus.territory(Team.RED) > nexus.territory(Team.BLUE) else Team.BLUE
             return winner, points
-    
+
 
 async def build_outfit_data(service_id: str, red_outfit_id: int, blue_outfit_id: int):
     if not service_id.startswith("s:"):
@@ -278,12 +278,12 @@ async def build_outfit_data(service_id: str, red_outfit_id: int, blue_outfit_id:
     async with auraxium.Client(service_id=service_id) as client:
         logger.info("Retrieving outfit data...")
         red_outfit, blue_outfit = await asyncio.gather(
-            client.get_by_id(ps2.Outfit, red_outfit_id), 
+            client.get_by_id(ps2.Outfit, red_outfit_id),
             client.get_by_id(ps2.Outfit, blue_outfit_id)
         )
         if red_outfit is None or blue_outfit is None:
             raise ValueError(f"{'Both' if red_outfit is None and blue_outfit is None else ('Red' if red_outfit is None else 'Blue')} outfit(s) do(es) not exist!")
-        
+
         (red_leader, #standing by
          blue_leader, red_members, blue_members) = await asyncio.gather(
             red_outfit.leader(),
@@ -309,7 +309,7 @@ async def build_outfit_data(service_id: str, red_outfit_id: int, blue_outfit_id:
 
 
 def start_alert(teams: Teams, members: Dict[int, List], world: int, instance: int, capture_rate: int, death_rate: float, death_delay: float, vehicle_destroy_rate: float, vehicle_destroy_delay: float):
-    
+
     logger.info(f"Starting alert on world {world}, zone instance {instance}")
     result = nexus_alert(world, instance, teams, members, capture_rate, death_rate, death_delay, vehicle_destroy_rate, vehicle_destroy_delay)
     logger.info(f"Finished alert on world {world}, zone instance {instance}")
@@ -338,7 +338,7 @@ def main():
         exit(1)
 
     start_alert(teams, members, args.world, random.randint(0, 0xFFFF), args.capture_rate, args.death_rate, args.death_delay)
-    
+
 
 if __name__ == "__main__":
     main()
