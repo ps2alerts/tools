@@ -86,6 +86,7 @@ class RankingParams:
 @dataclass
 class Ranking:
     timestamp: datetime
+    startTime: datetime
     round: int
     world: int
     outfitWarId: int
@@ -97,6 +98,7 @@ class Ranking:
     def to_json(self) -> dict:
         return {
             "timestamp": self.timestamp,
+            "startTime": self.startTime,
             "round": self.round,
             "world": self.world,
             "outfitWarId": self.outfitWarId,
@@ -110,8 +112,10 @@ class Ranking:
     @classmethod
     def from_json(cls, data: dict) -> 'Ranking':
         timestamp = isoparse(data["timestamp"])
+        startTime = isoparse(data["startTime"])
         return cls(
             timestamp,
+            startTime,
             int(data["round"]),
             int(data["world"]),
             int(data["outfitWarId"]),
@@ -132,6 +136,9 @@ def main():
     parser = ArgumentParser()
     parser.add_argument("service_id", help="ps2 census service id")
     parser.add_argument("world", type=int, choices=[1, 10, 13, 17], help="The world on which to simulate the outfit war")
+    parser.add_argument("--capture-rate", "-c", type=int, default=120, help="Number of seconds between captures")
+    parser.add_argument("--death-rate", "-d", type=float, default=0.5, help="Number of seconds between deaths")
+    parser.add_argument("--vehicle-destroy-rate", "-v", type=float, default=10.0, help="Number of seconds between vehicle destroys")
     args = parser.parse_args()
 
     res = requests.get(
@@ -203,7 +210,7 @@ def main():
                 instance = randint(1, 511)
                 results.append(
                     p.apply_async(
-                        start_alert, (teams, members, args.world, (instance << 7) | (round << 4) | i, 120, 0.5, 30),
+                        start_alert, (teams, members, args.world, (instance << 7) | (round << 4) | i, args.capture_rate, args.death_rate, 30, args.vehicle_destroy_rate, 30),
                         callback=match_result_handler
                     )
                 )

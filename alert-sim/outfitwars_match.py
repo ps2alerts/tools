@@ -9,9 +9,9 @@ import auraxium
 from auraxium import ps2
 import random
 
-from constants import Team, Classes, MetagameEventType, MetagameEventState, Faction
+from constants import Team, Classes, MetagameEventType, MetagameEventState, Faction, Vehicles, VEHICLE_WEAPONS
 from dataclass import OutfitwarsInstance, Outfit, Teams
-from events import MetagameEvent, DeathEvent, FacilityControlEvent
+from events import MetagameEvent, DeathEvent, FacilityControlEvent, VehicleDestroyEvent
 from service import get_rabbit, RabbitConnection, RabbitService, Logger
 from state import NexusMap
 
@@ -25,6 +25,13 @@ VS_WEAPON = 80   # Orion
 NC_WEAPON = 7169 # GD-7F
 TR_WEAPON = 7254 # MSW-R
 NSO_WEAPON = 6009899 # XMG-100
+
+weapons = {
+    Faction.VS: VS_WEAPON,
+    Faction.NC: NC_WEAPON,
+    Faction.TR: TR_WEAPON,
+    Faction.NSO: NSO_WEAPON
+}
 
 tiebreaker_points = { Team.RED: 0, Team.BLUE: 0 }
 tbpool = 500
@@ -44,6 +51,56 @@ def tiebreaker_worker(interval: float, nexus: NexusMap) -> Tuple[Thread, Event]:
     return thread, stop
         
 
+def vehicle_destroy_worker(
+        interval: float, 
+        event: OutfitwarsInstance, 
+        players: Dict[int, List[int]] = {
+            37571208657592881: [5428085259783352737], 
+            37570391403474491: [5428297992006446465, 5428985062301123025]
+        },
+        delay: float = 0
+    ) -> Tuple[Thread, Event]:
+    stop = Event()
+    def work():
+        global weapons
+        sleep(delay)
+        vehicle_destroy_queue = f'aggregator-outfitwars-{event.world}-{event.zone}-{event.zoneInstanceId}-VehicleDestroy'
+        thread_rabbit = RabbitService(RabbitConnection())
+        while not stop.wait(interval):
+            attackerOutfitId = random.choice(list(players.keys()))
+            victimOutfitId = random.choice(list(players.keys()))
+            i = 0
+            while attackerOutfitId == victimOutfitId and i < 5: # 0.5^5 == 3.125% tk rate
+                victimOutfitId = random.choice(list(players.keys()))
+                i += 1
+            attackerOutfit = event.teams.red if event.teams.red.id == attackerOutfitId else event.teams.blue
+            attacker = random.choice(players[attackerOutfitId])
+            attackerVehicle = random.choice([0, *Vehicles.by_faction(attackerOutfit.faction)])
+            if attackerVehicle != 0:
+                attackerWeapon = VEHICLE_WEAPONS[attackerVehicle][attackerOutfit.faction]
+            else:
+                attackerWeapon = weapons[attackerOutfit.faction]
+            victimOutfit = event.teams.red if event.teams.red.id == victimOutfitId else event.teams.blue
+            victim = random.choice(players[victimOutfitId])
+            victimVehicle = random.choice(Vehicles.by_faction(victimOutfit.faction))
+            vehicleDestroy = VehicleDestroyEvent(
+                world_id=str(int(event.world)),
+                attacker_character_id=str(attacker),
+                attacker_loadout_id=str(int(random.choice(Classes.by_faction(attackerOutfit.faction)))),
+                attacker_team_id='2' if attackerOutfitId == event.teams.blue.id else '3',
+                attacker_vehicle_id=str(attackerVehicle),
+                attacker_weapon_id=str(attackerWeapon),
+                character_id=str(victim),
+                faction_id=str(int(victimOutfit.faction)),
+                team_id='2' if victimOutfitId == event.teams.blue.id else '3',
+                vehicle_id=str(victimVehicle),
+                zone_id=(int(event.zoneInstanceId) << 16) | int(event.zone),
+            )
+            thread_rabbit.send(vehicleDestroy, vehicle_destroy_queue)
+    thread = Thread(target=work)
+    return thread, stop
+
+
 def death_worker(
         interval: float, 
         event: OutfitwarsInstance, 
@@ -55,16 +112,11 @@ def death_worker(
     ) -> Tuple[Thread, Event]:
     stop = Event()
     def work():
+        global weapons
         sleep(delay)
         death_queue = f'aggregator-outfitwars-{event.world}-{event.zone}-{event.zoneInstanceId}-Death'
         thread_rabbit = RabbitService(RabbitConnection())
         #players = [BLUE_PLAYER, RED_PLAYER, NSO_RED_PLAYER]
-        weapons = {
-            Faction.VS: VS_WEAPON,
-            Faction.NC: NC_WEAPON,
-            Faction.TR: TR_WEAPON,
-            Faction.NSO: NSO_WEAPON
-        }
         while not stop.wait(interval):
             attackerOutfitId = random.choice(list(players.keys()))
             victimOutfitId = random.choice(list(players.keys()))
@@ -105,7 +157,9 @@ def nexus_alert(
     },
     capture_rate: int = 5,
     death_rate: float = 0.5,
-    first_death_delay: float = 0.0) -> Optional[Tuple[Team, Dict[Team, int]]]:
+    first_death_delay: float = 0.0,
+    vehicle_destroy_rate: float = 30.0,
+    vehicle_destroy_delay: float = 0.0) -> Optional[Tuple[Team, Dict[Team, int]]]:
     
     metagame_event_queue = f'aggregator-{world}-MetagameEvent'
 
@@ -139,6 +193,7 @@ def nexus_alert(
     rabbit = get_rabbit()
     rabbit.send(metagame_event, metagame_event_queue)
     death_thread, death_stop_event = None, None
+    vehicle_destroy_thread, vehicle_destroy_stop_event = None, None
     tb_thread, tb_stop_event = None, None
     nexus = None
     try:
@@ -147,9 +202,11 @@ def nexus_alert(
         captures = MAX_CAPTURES
         fac_control_queue = f'aggregator-outfitwars-{int(event.world)}-{int(event.zone)}-{event.zoneInstanceId}-FacilityControl'
         death_thread, death_stop_event = death_worker(death_rate, event, members, first_death_delay)
+        vehicle_destroy_thread, vehicle_destroy_stop_event = vehicle_destroy_worker(vehicle_destroy_rate, event, members, vehicle_destroy_delay)
         tb_thread, tb_stop_event = tiebreaker_worker(60, nexus)
         tb_thread.start()
         death_thread.start()
+        vehicle_destroy_thread.start()
         while to_capture not in ['310610', '310600'] and captures > 0:
             sleep(capture_rate)
             team = random.choice([Team.BLUE, Team.RED])
@@ -194,6 +251,11 @@ def nexus_alert(
             death_stop_event.set()
             if death_thread.is_alive():
                 death_thread.join()
+        
+        if vehicle_destroy_stop_event and vehicle_destroy_thread:
+            vehicle_destroy_stop_event.set()
+            if vehicle_destroy_thread.is_alive():
+                vehicle_destroy_thread.join()
 
         if tb_stop_event and tb_thread:
             tb_stop_event.set()
@@ -246,10 +308,10 @@ async def build_outfit_data(service_id: str, red_outfit_id: int, blue_outfit_id:
     return Teams(red_outfit_data, blue_outfit_data), character_ids
 
 
-def start_alert(teams: Teams, members: Dict[int, List], world: int, instance: int, capture_rate: int, death_rate: float, death_delay: float):
+def start_alert(teams: Teams, members: Dict[int, List], world: int, instance: int, capture_rate: int, death_rate: float, death_delay: float, vehicle_destroy_rate: float, vehicle_destroy_delay: float):
     
     logger.info(f"Starting alert on world {world}, zone instance {instance}")
-    result = nexus_alert(world, instance, teams, members, capture_rate, death_rate, death_delay)
+    result = nexus_alert(world, instance, teams, members, capture_rate, death_rate, death_delay, vehicle_destroy_rate, vehicle_destroy_delay)
     logger.info(f"Finished alert on world {world}, zone instance {instance}")
     if result is not None:
         logger.info(f"Winner was team {result[0].name.capitalize()}")
