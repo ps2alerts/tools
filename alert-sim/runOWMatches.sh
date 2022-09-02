@@ -1,6 +1,11 @@
 #!/bin/bash
 
-if test ! -d .venv; then
+if [[ $# -ne 2 ]]; then
+    echo "Usage: runOWMatches.sh <service-id> <world>"
+    exit 1
+fi
+
+if [[ ! -d .venv ]]; then
     echo "Preparing virtual environment..."
     python3 -m venv .venv
     source .venv/bin/activate
@@ -9,4 +14,4 @@ else
     source .venv/bin/activate
 fi
 
-python StartAndEndInstance.py
+python outfitwar_dispatcher.py $1 $2

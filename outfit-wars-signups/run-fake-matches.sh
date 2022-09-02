@@ -1,6 +1,4 @@
-#!/bin/bash
-
-if test ! -d .venv; then
+if [[ ! -d .venv ]]; then
     echo "Preparing virtual environment..."
     python3 -m venv .venv
     source .venv/bin/activate
@@ -9,4 +7,4 @@ else
     source .venv/bin/activate
 fi
 
-python StartAndEndInstance.py
+python fake_matches.py
