@@ -64,7 +64,7 @@ def vehicle_destroy_worker(
     def work():
         global weapons
         sleep(delay)
-        vehicle_destroy_queue = f'aggregator-outfitwars-{event.world}-{event.zone}-{event.zoneInstanceId}-VehicleDestroy'
+        vehicle_destroy_queue = f'aggregator-outfitwars-{event.world}-{event.zone}-{event.censusInstanceId}-VehicleDestroy'
         thread_rabbit = RabbitService(RabbitConnection())
         while not stop.wait(interval):
             attackerOutfitId = random.choice(list(players.keys()))
@@ -114,7 +114,7 @@ def death_worker(
     def work():
         global weapons
         sleep(delay)
-        death_queue = f'aggregator-outfitwars-{event.world}-{event.zone}-{event.zoneInstanceId}-Death'
+        death_queue = f'aggregator-outfitwars-{event.world}-{event.zone}-{event.censusInstanceId}-Death'
         thread_rabbit = RabbitService(RabbitConnection())
         #players = [BLUE_PLAYER, RED_PLAYER, NSO_RED_PLAYER]
         while not stop.wait(interval):
@@ -165,7 +165,7 @@ def nexus_alert(
 
     zone_id = (instance << 16) | 10
     event = OutfitwarsInstance(
-        censusInstanceId=random.randint(1, 123),
+        censusInstanceId=random.randint(25000, 40000),
         zoneInstanceId=str(instance),
         world=world,
         zone=10,
@@ -200,7 +200,7 @@ def nexus_alert(
         nexus = NexusMap(zone_id & 0xFFFF)
         to_capture = 0
         captures = MAX_CAPTURES
-        fac_control_queue = f'aggregator-outfitwars-{int(event.world)}-{int(event.zone)}-{event.zoneInstanceId}-FacilityControl'
+        fac_control_queue = f'aggregator-outfitwars-{int(event.world)}-{int(event.zone)}-{event.censusInstanceId}-FacilityControl'
         death_thread, death_stop_event = death_worker(death_rate, event, members, first_death_delay)
         vehicle_destroy_thread, vehicle_destroy_stop_event = vehicle_destroy_worker(vehicle_destroy_rate, event, members, vehicle_destroy_delay)
         tb_thread, tb_stop_event = tiebreaker_worker(60, nexus)
