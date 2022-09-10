@@ -1,6 +1,7 @@
 from datetime import datetime
+import json
 from time import sleep
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 from threading import Event, Thread
 from argparse import ArgumentParser
 
@@ -9,11 +10,12 @@ import auraxium
 from auraxium import ps2
 import random
 
-from constants import Team, Classes, MetagameEventType, MetagameEventState, Faction, Vehicles, VEHICLE_WEAPONS
+from constants import Team, Classes, MetagameEventType, MetagameEventState, Faction, Vehicles, VEHICLE_WEAPONS, World
 from dataclass import OutfitwarsInstance, Outfit, Teams
 from events import MetagameEvent, DeathEvent, FacilityControlEvent, VehicleDestroyEvent
 from service import get_rabbit, RabbitConnection, RabbitService, Logger
 from state import NexusMap
+from replay import MetagameReplayEvent, FacilityControlReplayEvent, DeathReplayEvent, VehicleDestroyReplayEvent
 
 logger = Logger.getLogger("Match")
 
@@ -64,7 +66,7 @@ def vehicle_destroy_worker(
     def work():
         global weapons
         sleep(delay)
-        vehicle_destroy_queue = f'aggregator-outfitwars-{event.world}-{event.zone}-{event.zoneInstanceId}-VehicleDestroy'
+        vehicle_destroy_queue = f'aggregator-outfitwars-{event.world}-{event.zone}-{event.censusInstanceId}-VehicleDestroy'
         thread_rabbit = RabbitService(RabbitConnection())
         while not stop.wait(interval):
             attackerOutfitId = random.choice(list(players.keys()))
@@ -114,7 +116,7 @@ def death_worker(
     def work():
         global weapons
         sleep(delay)
-        death_queue = f'aggregator-outfitwars-{event.world}-{event.zone}-{event.zoneInstanceId}-Death'
+        death_queue = f'aggregator-outfitwars-{event.world}-{event.zone}-{event.censusInstanceId}-Death'
         thread_rabbit = RabbitService(RabbitConnection())
         #players = [BLUE_PLAYER, RED_PLAYER, NSO_RED_PLAYER]
         while not stop.wait(interval):
@@ -165,7 +167,7 @@ def nexus_alert(
 
     zone_id = (instance << 16) | 10
     event = OutfitwarsInstance(
-        censusInstanceId=random.randint(1, 123),
+        censusInstanceId=random.randint(1, 65535),
         zoneInstanceId=str(instance),
         world=world,
         zone=10,
@@ -200,7 +202,7 @@ def nexus_alert(
         nexus = NexusMap(zone_id & 0xFFFF)
         to_capture = 0
         captures = MAX_CAPTURES
-        fac_control_queue = f'aggregator-outfitwars-{int(event.world)}-{int(event.zone)}-{event.zoneInstanceId}-FacilityControl'
+        fac_control_queue = f'aggregator-outfitwars-{int(event.world)}-{int(event.zone)}-{event.censusInstanceId}-FacilityControl'
         death_thread, death_stop_event = death_worker(death_rate, event, members, first_death_delay)
         vehicle_destroy_thread, vehicle_destroy_stop_event = vehicle_destroy_worker(vehicle_destroy_rate, event, members, vehicle_destroy_delay)
         tb_thread, tb_stop_event = tiebreaker_worker(60, nexus)
@@ -272,6 +274,168 @@ def nexus_alert(
             return winner, points
 
 
+def replay_vehicle_destroy_worker(
+        event: OutfitwarsInstance,
+        vehicle_destroys: List[VehicleDestroyReplayEvent]
+    ) -> Thread:
+    def work():
+        global weapons
+        vehicle_destroy_queue = f'aggregator-outfitwars-{event.world}-{event.zone}-{event.censusInstanceId}-VehicleDestroy'
+        thread_rabbit = RabbitService(RabbitConnection())
+        index = 0
+        interval = (datetime.fromtimestamp(int(vehicle_destroys[0].timestamp)) - event.timeStarted).total_seconds()
+        while index < len(vehicle_destroys):
+            replay_event = vehicle_destroys[index]
+            sleep(interval)
+            vehicleDestroy = VehicleDestroyEvent(
+                world_id=str(int(event.world)),
+                attacker_character_id=replay_event.attacker_character_id,
+                attacker_loadout_id=replay_event.attacker_loadout_id,
+                attacker_team_id=replay_event.attacker_team_id,
+                attacker_vehicle_id=replay_event.attacker_vehicle_id,
+                attacker_weapon_id=replay_event.attacker_weapon_id,
+                character_id=replay_event.character_id,
+                faction_id=replay_event.faction_id,
+                team_id=replay_event.team_id,
+                vehicle_id=replay_event.vehicle_definition_id,
+                zone_id=replay_event.zone_id,
+                timestamp=replay_event.timestamp
+            )
+            thread_rabbit.send(vehicleDestroy, vehicle_destroy_queue)
+            if index + 1 < len(vehicle_destroys):
+                interval = (datetime.fromtimestamp(int(vehicle_destroys[index + 1].timestamp)) - datetime.fromtimestamp(int(vehicle_destroys[index].timestamp))).total_seconds()
+            index += 1
+    thread = Thread(target=work)
+    return thread
+
+
+def replay_death_worker(
+        event: OutfitwarsInstance,
+        death_replay_events: List[DeathReplayEvent]
+    ) -> Thread:
+    def work():
+        death_queue = f'aggregator-outfitwars-{event.world}-{event.zone}-{event.censusInstanceId}-Death'
+        thread_rabbit = RabbitService(RabbitConnection())
+        index = 0
+        interval = (datetime.fromtimestamp(int(death_replay_events[0].timestamp)) - event.timeStarted).total_seconds()
+        #players = [BLUE_PLAYER, RED_PLAYER, NSO_RED_PLAYER]
+        while index < len(death_replay_events):
+            replay_event = death_replay_events[index]
+            sleep(interval)
+            death = DeathEvent(
+                attacker_character_id=replay_event.attacker_character_id,
+                attacker_loadout_id=replay_event.attacker_loadout_id,
+                attacker_weapon_id=replay_event.attacker_weapon_id,
+                attacker_team_id=replay_event.attacker_team_id,
+                character_id=replay_event.character_id,
+                character_loadout_id=replay_event.character_loadout_id,
+                is_headshot=replay_event.is_headshot,
+                team_id=replay_event.team_id,
+                world_id=replay_event.world_id,
+                zone_id=replay_event.zone_id,
+                timestamp=replay_event.timestamp
+            )
+            thread_rabbit.send(death, death_queue)
+            if index + 1 < len(death_replay_events):
+                interval = (datetime.fromtimestamp(int(death_replay_events[index + 1].timestamp)) - datetime.fromtimestamp(int(death_replay_events[index].timestamp))).total_seconds()
+            index += 1
+    thread = Thread(target=work)
+    return thread
+
+def replay_facility_control_worker(
+    event: OutfitwarsInstance,
+    facility_events: List[FacilityControlReplayEvent]
+) -> Thread:
+    def work():
+        fac_control_queue = f'aggregator-outfitwars-{int(event.world)}-{int(event.zone)}-{event.censusInstanceId}-FacilityControl'
+        thread_rabbit = RabbitService(RabbitConnection())
+        index = 0
+        interval = (datetime.fromtimestamp(int(facility_events[0].timestamp)) - event.timeStarted).total_seconds()
+        while index < len(facility_events):
+            replay_event = facility_events[index]
+            sleep(interval)
+            facility_control = FacilityControlEvent(
+                facility_id=replay_event.facility_id,
+                zone_id=replay_event.zone_id,
+                world_id=replay_event.world_id,
+                old_faction_id=replay_event.faction_old,
+                new_faction_id=replay_event.faction_new,
+                outfit_id=replay_event.outfit_id,
+                timestamp=replay_event.timestamp,
+                duration_held=replay_event.duration_held
+            )
+            thread_rabbit.send(facility_control, fac_control_queue)
+            if index + 1 < len(facility_events):
+                interval = (datetime.fromtimestamp(int(facility_events[index + 1].timestamp)) - datetime.fromtimestamp(int(facility_events[index].timestamp))).total_seconds()
+            index += 1
+    thread = Thread(target=work)
+    return thread
+
+def replay(
+    metagame_replay_event: MetagameReplayEvent,
+    metagame_replay_end_event: MetagameReplayEvent,
+    facility_events: List[FacilityControlReplayEvent],
+    death_events: List[DeathReplayEvent],
+    vehicle_destroy_events: List[VehicleDestroyReplayEvent]
+):
+    world = World(int(metagame_replay_event.world_id))
+    censusInstance = int(metagame_replay_event.instance_id)
+    metagame_event_queue = f'aggregator-{world.value}-MetagameEvent'
+
+    zone_id = int(metagame_replay_event.zone_id)
+    event = OutfitwarsInstance(
+        censusInstanceId=censusInstance,
+        zoneInstanceId=((zone_id >> 16) & 0xFFFF),
+        world=world,
+        zone=zone_id & 0xFFFF,
+        timeStarted=datetime.fromtimestamp(int(metagame_replay_event.timestamp)),
+        phase=1,
+        round=2, #really doesn't matter for a replay
+        teams=None
+    )
+
+    metagame_event = MetagameEvent(
+        instance_id=metagame_replay_event.instance_id,
+        metagame_event_id=metagame_replay_event.metagame_event_id,
+        metagame_event_state=metagame_replay_event.metagame_event_state,
+        metagame_event_state_name=metagame_replay_event.metagame_event_state_name,
+        world_id=metagame_replay_event.world_id,
+        zone_id=metagame_replay_event.zone_id,
+        faction_vs=metagame_replay_event.faction_vs,
+        faction_nc=metagame_replay_event.faction_nc,
+        faction_tr=metagame_replay_event.faction_tr,
+    )
+    rabbit = get_rabbit()
+    rabbit.send(metagame_event, metagame_event_queue)
+    death_thread = None
+    vehicle_destroy_thread = None
+    try:
+        death_thread = replay_death_worker(event, death_events)
+        vehicle_destroy_thread = replay_vehicle_destroy_worker(event, vehicle_destroy_events)
+        facility_control_thread = replay_facility_control_worker(event, facility_events)
+        death_thread.start()
+        vehicle_destroy_thread.start()
+        facility_control_thread.start()
+        death_thread.join()
+        vehicle_destroy_thread.join()
+        facility_control_thread.join()
+    finally:
+        metagame_replay_end_event
+        metagame_end_event = MetagameEvent(
+            instance_id=metagame_replay_end_event.instance_id,
+            metagame_event_id=metagame_replay_end_event.metagame_event_id,
+            metagame_event_state=metagame_replay_end_event.metagame_event_state,
+            metagame_event_state_name=metagame_replay_end_event.metagame_event_state_name,
+            world_id=metagame_replay_end_event.world_id,
+            zone_id=metagame_replay_end_event.zone_id,
+            faction_vs=metagame_replay_end_event.faction_vs,
+            faction_nc=metagame_replay_end_event.faction_nc,
+            faction_tr=metagame_replay_end_event.faction_tr,
+            timestamp=metagame_replay_end_event.timestamp
+        )
+        rabbit.send(metagame_end_event, metagame_event_queue)
+
+
 async def build_outfit_data(service_id: str, red_outfit_id: int, blue_outfit_id: int):
     if not service_id.startswith("s:"):
         service_id = f"s:{service_id}"
@@ -322,13 +486,22 @@ def start_alert(teams: Teams, members: Dict[int, List], world: int, instance: in
 def main():
     global logger
     parser = ArgumentParser(description="A tool that can fake a single outfit wars match between two outfits")
-    parser.add_argument("service_id", type=str, help="The PS2 Census service id used for querying outfit (member) data")
-    parser.add_argument("--red-outfit-id", "-r", type=int, default=37570391403474491, help="The outfit id for the red team")
-    parser.add_argument("--blue-outfit-id", "-b", type=int, default=37571208657592881, help="The outfit id for the blue team")
-    parser.add_argument("--world", "-w", type=int, choices=[1, 10, 13, 17], default=1, help="The world having the outfit war")
-    parser.add_argument("--capture-rate", "-c", type=int, default=5, help="The number of seconds between base captures")
-    parser.add_argument("--death-rate", "-d", type=float, default=1.0, help="The number of seconds between deaths (can be a decimal)")
-    parser.add_argument("--death-delay", "-l", type=float, default=0.0, help="The decimal number of seconds to delay the first death by")
+    
+    subparsers = parser.add_subparsers(dest="subparser_name", required=True)
+    fake_match_parser = subparsers.add_parser("fake", help="Fake an outfitwars match for testing")
+    fake_match_parser.add_argument("service_id", type=str, help="The PS2 Census service id used for querying outfit (member) data")
+    fake_match_parser.add_argument("--red-outfit-id", "-r", type=int, default=37570391403474491, help="The outfit id for the red team")
+    fake_match_parser.add_argument("--blue-outfit-id", "-b", type=int, default=37571208657592881, help="The outfit id for the blue team")
+    fake_match_parser.add_argument("--world", "-w", type=int, choices=[1, 10, 13, 17], default=1, help="The world having the outfit war")
+    fake_match_parser.add_argument("--capture-rate", "-c", type=int, default=5, help="The number of seconds between base captures")
+    fake_match_parser.add_argument("--death-rate", "-d", type=float, default=1.0, help="The number of seconds between deaths (can be a decimal)")
+    fake_match_parser.add_argument("--death-delay", "-l", type=float, default=0.0, help="The decimal number of seconds to delay the first death by")
+    
+    replay_parser = subparsers.add_parser("replay", help="Replay an outfitwars match to fix failed matches")
+    replay_parser.add_argument("metagame_events_file")
+    replay_parser.add_argument("facility_events_file")
+    replay_parser.add_argument("death_events_file")
+    replay_parser.add_argument("vehicle_destroy_events_file")
     args = parser.parse_args()
 
     try:
@@ -337,7 +510,32 @@ def main():
         logger.error(str(e))
         exit(1)
 
-    start_alert(teams, members, args.world, random.randint(0, 0xFFFF), args.capture_rate, args.death_rate, args.death_delay)
+    if args.subparser_name == "fake":     
+        start_alert(teams, members, args.world, random.randint(0, 0xFFFF), args.capture_rate, args.death_rate, args.death_delay, 5, 5)
+    else:
+        with open(args.metagame_events_file) as f:
+            metagame_events = json.load(f)
+        assert len(metagame_events) == 2, "Should have only a start and end event for a single alert!"
+        with open(args.facility_events_file) as f:
+            facility_events_data = json.load(f)
+        with open(args.death_events_file) as f:
+            death_events_data = json.load(f)
+        with open(args.vehicle_destroy_events_file) as f:
+            vehicle_destroy_events_data = json.load(f)
+        
+        logger.info("Building replay event objects...")
+        metagame_start_event = MetagameReplayEvent.from_json(metagame_events[0])
+        metagame_end_event = MetagameReplayEvent.from_json(metagame_events[1])
+
+        facility_events = [FacilityControlReplayEvent.from_json(event) for event in facility_events_data]
+        death_events = [DeathReplayEvent.from_json(event) for event in death_events_data]
+        vehicle_destroy_events = [VehicleDestroyReplayEvent.from_json(event) for event in vehicle_destroy_events_data]
+        logger.info("Built replay event objects")
+        logger.info("Starting replay")
+        replay(metagame_start_event, metagame_end_event, facility_events, death_events, vehicle_destroy_events)
+        
+
+        
 
 
 if __name__ == "__main__":
