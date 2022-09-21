@@ -287,6 +287,7 @@ def replay_vehicle_destroy_worker(
         while index < len(vehicle_destroys):
             replay_event = vehicle_destroys[index]
             sleep(interval)
+            print('Next Vehicle Destroy event in: '+interval+' seconds...')
             vehicleDestroy = VehicleDestroyEvent(
                 world_id=str(int(event.world)),
                 attacker_character_id=replay_event.attacker_character_id,
@@ -321,6 +322,7 @@ def replay_death_worker(
         #players = [BLUE_PLAYER, RED_PLAYER, NSO_RED_PLAYER]
         while index < len(death_replay_events):
             replay_event = death_replay_events[index]
+            print('Next Death event in: '+interval+' seconds...')
             sleep(interval)
             death = DeathEvent(
                 attacker_character_id=replay_event.attacker_character_id,
@@ -354,6 +356,7 @@ def replay_facility_control_worker(
         while index < len(facility_events):
             replay_event = facility_events[index]
             print(replay_event)
+            print('Next Facility event in: '+interval+' seconds...')
             sleep(interval)
             facility_control = FacilityControlEvent(
                 facility_id=replay_event.facility_id,
