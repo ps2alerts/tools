@@ -2,3 +2,5 @@
 .idea
 __pycache__
 *.json
+
+alert-sim/replay/files/*
