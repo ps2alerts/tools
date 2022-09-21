@@ -347,12 +347,13 @@ def replay_facility_control_worker(
     facility_events: List[FacilityControlReplayEvent]
 ) -> Thread:
     def work():
-        fac_control_queue = f'aggregator-outfitwars-{int(event.world)}-{int(event.zone)}-{event.censusInstanceId}-FacilityControl'
+        fac_control_queue = f'aggregator-{event.instanceId}-FacilityControl'
         thread_rabbit = RabbitService(RabbitConnection())
         index = 0
         interval = (datetime.fromtimestamp(int(facility_events[0].timestamp)) - event.timeStarted).total_seconds()
         while index < len(facility_events):
             replay_event = facility_events[index]
+            print(replay_event)
             sleep(interval)
             facility_control = FacilityControlEvent(
                 facility_id=replay_event.facility_id,
@@ -364,6 +365,8 @@ def replay_facility_control_worker(
                 timestamp=replay_event.timestamp,
                 duration_held=replay_event.duration_held
             )
+            print('Sending FacilityControl message to queue ' + fac_control_queue)
+            print(facility_control)
             thread_rabbit.send(facility_control, fac_control_queue)
             if index + 1 < len(facility_events):
                 interval = (datetime.fromtimestamp(int(facility_events[index + 1].timestamp)) - datetime.fromtimestamp(int(facility_events[index].timestamp))).total_seconds()
@@ -486,7 +489,7 @@ def start_alert(teams: Teams, members: Dict[int, List], world: int, instance: in
 def main():
     global logger
     parser = ArgumentParser(description="A tool that can fake a single outfit wars match between two outfits")
-    
+
     subparsers = parser.add_subparsers(dest="subparser_name", required=True)
     fake_match_parser = subparsers.add_parser("fake", help="Fake an outfitwars match for testing")
     fake_match_parser.add_argument("service_id", type=str, help="The PS2 Census service id used for querying outfit (member) data")
@@ -496,21 +499,20 @@ def main():
     fake_match_parser.add_argument("--capture-rate", "-c", type=int, default=5, help="The number of seconds between base captures")
     fake_match_parser.add_argument("--death-rate", "-d", type=float, default=1.0, help="The number of seconds between deaths (can be a decimal)")
     fake_match_parser.add_argument("--death-delay", "-l", type=float, default=0.0, help="The decimal number of seconds to delay the first death by")
-    
+
     replay_parser = subparsers.add_parser("replay", help="Replay an outfitwars match to fix failed matches")
-    replay_parser.add_argument("metagame_events_file")
-    replay_parser.add_argument("facility_events_file")
-    replay_parser.add_argument("death_events_file")
-    replay_parser.add_argument("vehicle_destroy_events_file")
+    replay_parser.add_argument("metagame_events_file", type=str)
+    replay_parser.add_argument("facility_events_file", type=str)
+    replay_parser.add_argument("death_events_file", type=str)
+    replay_parser.add_argument("vehicle_destroy_events_file", type=str)
     args = parser.parse_args()
 
-    try:
-        teams, members = asyncio.get_event_loop().run_until_complete(build_outfit_data(args.service_id, args.red_outfit_id, args.blue_outfit_id))
-    except ValueError as e:
-        logger.error(str(e))
-        exit(1)
-
-    if args.subparser_name == "fake":     
+    if args.subparser_name == "fake":
+        try:
+            teams, members = asyncio.get_event_loop().run_until_complete(build_outfit_data(args.service_id, args.red_outfit_id, args.blue_outfit_id))
+        except ValueError as e:
+            logger.error(str(e))
+            exit(1)
         start_alert(teams, members, args.world, random.randint(0, 0xFFFF), args.capture_rate, args.death_rate, args.death_delay, 5, 5)
     else:
         with open(args.metagame_events_file) as f:
@@ -522,7 +524,7 @@ def main():
             death_events_data = json.load(f)
         with open(args.vehicle_destroy_events_file) as f:
             vehicle_destroy_events_data = json.load(f)
-        
+
         logger.info("Building replay event objects...")
         metagame_start_event = MetagameReplayEvent.from_json(metagame_events[0])
         metagame_end_event = MetagameReplayEvent.from_json(metagame_events[1])
@@ -532,10 +534,8 @@ def main():
         vehicle_destroy_events = [VehicleDestroyReplayEvent.from_json(event) for event in vehicle_destroy_events_data]
         logger.info("Built replay event objects")
         logger.info("Starting replay")
-        replay(metagame_start_event, metagame_end_event, facility_events, death_events, vehicle_destroy_events)
-        
 
-        
+        replay(metagame_start_event, metagame_end_event, facility_events, death_events, vehicle_destroy_events)
 
 
 if __name__ == "__main__":

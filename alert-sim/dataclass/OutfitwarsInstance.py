@@ -5,7 +5,7 @@ from dataclasses_json import dataclass_json
 from datetime import datetime
 from typing import Optional
 from constants import AlertState, Ps2alertsEventType, World, Zone, Faction
-from .MetagameResult import MetagameResult    
+from .MetagameResult import MetagameResult
 
 @dataclass_json
 @dataclass
@@ -44,5 +44,5 @@ class OutfitwarsInstance:
     features = {'captureHistory': True, 'xpm': True}
 
     def __post_init__(self):
-        self.instanceId = 'outfitwars-'+str(int(self.world))+'-'+str(int(self.zone))+'-'+self.zoneInstanceId
+        self.instanceId = 'outfitwars-'+str(int(self.world))+'-'+str(int(self.zone))+'-'+str(self.censusInstanceId)
         self.mapVersion = '1.1' if self.zone == Zone.OSHUR else '1.0'
