@@ -287,7 +287,7 @@ def replay_vehicle_destroy_worker(
         while index < len(vehicle_destroys):
             replay_event = vehicle_destroys[index]
             sleep(interval)
-            print('Next Vehicle Destroy event in: '+interval+' seconds...')
+            print('Next Vehicle Destroy event in: '+str(interval)+' seconds...')
             vehicleDestroy = VehicleDestroyEvent(
                 world_id=str(int(event.world)),
                 attacker_character_id=replay_event.attacker_character_id,
@@ -322,7 +322,7 @@ def replay_death_worker(
         #players = [BLUE_PLAYER, RED_PLAYER, NSO_RED_PLAYER]
         while index < len(death_replay_events):
             replay_event = death_replay_events[index]
-            print('Next Death event in: '+interval+' seconds...')
+            print('Next Death event in: '+str(interval)+' seconds...')
             sleep(interval)
             death = DeathEvent(
                 attacker_character_id=replay_event.attacker_character_id,
@@ -356,7 +356,7 @@ def replay_facility_control_worker(
         while index < len(facility_events):
             replay_event = facility_events[index]
             print(replay_event)
-            print('Next Facility event in: '+interval+' seconds...')
+            print('Next Facility event in: '+str(interval)+' seconds...')
             sleep(interval)
             facility_control = FacilityControlEvent(
                 facility_id=replay_event.facility_id,
@@ -370,7 +370,9 @@ def replay_facility_control_worker(
             )
             print('Sending FacilityControl message to queue ' + fac_control_queue)
             print(facility_control)
+            thread_rabbit = RabbitService(RabbitConnection())
             thread_rabbit.send(facility_control, fac_control_queue)
+            thread_rabbit.close()
             if index + 1 < len(facility_events):
                 interval = (datetime.fromtimestamp(int(facility_events[index + 1].timestamp)) - datetime.fromtimestamp(int(facility_events[index].timestamp))).total_seconds()
             index += 1

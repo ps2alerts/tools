@@ -28,6 +28,10 @@ class RabbitService:
             queueName,
             message
         )
+    def close(self):
+        log.debug(f"Closing connection to Rabbit queue {queueName}")
+        self._connection.close()
+        log.debug(f"{queueName} closed")
 
 rabbit = None
 def get_rabbit():
