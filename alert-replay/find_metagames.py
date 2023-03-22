@@ -1,40 +1,54 @@
 # Find metagames for a supplied world and date ranges
-# Usage: python find_metagames.py <world> <start_date> <end_date>
-# Example: python find_metagames.py 1 2023-01-01 2023-01-05
+# Usage: python find_metagames.py <service_id> <world> <start_date> <end_date>
+# Example: python find_metagames.py fooServiceId 10 2023-01-01 2023-01-05
 
 import argparse
 import requests
 import json
+from datetime import datetime
 
-service_id = "ps2alertsdotcom"
 
+# Function to validate the arguments
+def validate_args(service_id, world, start_date, end_date):
+    # Validate arguments
+    if not service_id:
+        print("Service ID must be supplied!")
+        exit()
+
+    if world not in [1, 10, 13, 17, 1000, 2000]:
+        print("Invalid world!")
+        exit()
+
+    if not start_date or not end_date:
+        print("Date range must be supplied!")
+        exit()
+
+    if start_date > end_date:
+        print("Start date must be before end date!")
+        exit()
+
+
+# Parse Args
 parser = argparse.ArgumentParser(
     description='Find metagames for a supplied world and date ranges'
 )
+parser.add_argument('service_id', type=str, help='Census service ID')
 parser.add_argument('world', type=int, help='World number')
-parser.add_argument('start_timestamp', type=int, help='Start unix timestamp')
-parser.add_argument('end_timestamp', type=int, help='End unix timestamp')
-
+parser.add_argument('start_date', type=str, help='Start date')
+parser.add_argument('end_date', type=str, help='End date')
 args = parser.parse_args()
+print(args)
 
-# Validate arguments
-if args.world not in [1, 10, 13, 17, 1000, 2000]:
-    print("Invalid world!")
-    exit()
-
-if not args.start_timestamp or not args.end_timestamp:
-    print("Timestamps must be supplied!")
-    exit()
-
-if args.start_timestamp > args.start_timestamp:
-    print("Start timestamp must be before end timestamp!")
-    exit()
+validate_args(args.service_id, args.world, args.start_date, args.end_date)
 
 # Send a request to Census to get the metagame data for the supplied world and date range
 # The response is a JSON object with a list of metagame events
 # Each metagame event has a timestamp, metagame instance ID, and metagame state
 
-query = "https://census.daybreakgames.com/s:" + service_id + "/get/ps2:v2/world_event?type=metagame&world_id=" + str(args.world) + "&after=" + str(args.start_timestamp) + "&before=" + str(args.end_timestamp) + "&c:limit=10000"
+start_timestamp = int(datetime.strptime(args.start_date, '%Y-%m-%d').timestamp())
+end_timestamp = int(datetime.strptime(args.end_date, '%Y-%m-%d').timestamp())
+
+query = "https://census.daybreakgames.com/s:" + args.service_id + "/get/ps2:v2/world_event?type=metagame&world_id=" + str(args.world) + "&after=" + str(start_timestamp) + "&before=" + str(end_timestamp) + "&c:limit=1000"
 print(query)
 r = requests.get(query)
 

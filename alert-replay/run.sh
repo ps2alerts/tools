@@ -9,4 +9,4 @@ else
     source .venv/bin/activate
 fi
 
-python find_metagames.py 10 1648767600 1651273200
+python find_metagames.py $1 $2 $3 $4
