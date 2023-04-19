@@ -1,10 +1,12 @@
 #!/bin/bash
 
-if test ! -d .venv; then
+SCRIPT_DIR=$(dirname "$0")
+
+if test ! -d "SCRIPT_DIR/.venv"; then
     echo "Preparing virtual environment..."
     python3 -m venv .venv
     source .venv/bin/activate
-    pip install -r requirements.txt
+    pip install -r "$SCRIPT_DIR/requirements.txt"
 else
     source .venv/bin/activate
 fi
